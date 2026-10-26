@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with levels, progress, XP and rewards",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "maxLength": 64 },
+        "syncCode": { "type": "string", "maxLength": 32 },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "bio": { "type": "string", "maxLength": 250 },
+        "xp": { "type": "number" },
+        "level": { "type": "number" },
+        "streak": { "type": "number" },
+        "gems": { "type": "number" },
+        "hearts": { "type": "number" },
+        "perfectSignsCount": { "type": "number" },
+        "lastActiveDate": { "type": "string", "maxLength": 32 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["username", "syncCode", "xp", "level", "gems"]
+    },
+    "UserFeedback": {
+      "title": "UserFeedback",
+      "description": "Feedback message from a student to administrators",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "maxLength": 64 },
+        "syncCode": { "type": "string", "maxLength": 32 },
+        "type": { "type": "string", "enum": ["sugestao", "erro", "reclamacao", "elogio"] },
+        "title": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["pendente", "em_analise", "resolvido", "arquivado"] },
+        "priority": { "type": "string", "enum": ["baixa", "media", "alta"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "adminReply": { "type": "string", "maxLength": 2000 },
+        "repliedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["username", "type", "title", "description", "status"]
+    },
+    "CommunitySign": {
+      "title": "CommunitySign",
+      "description": "Sign taught to the AI and shared with community",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 64 },
+        "category": { "type": "string", "maxLength": 64 },
+        "difficulty": { "type": "string", "maxLength": 32 },
+        "meaning": { "type": "string", "maxLength": 500 },
+        "teacherName": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["name", "meaning", "teacherName"]
+    },
+    "SystemAnnouncement": {
+      "title": "SystemAnnouncement",
+      "description": "Real-time announcement broadcast by administrators",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 120 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "type": { "type": "string", "enum": ["info", "celebration", "alert", "event"] },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["title", "message", "type", "active"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Individual student account profiles and progress"
+    },
+    "/feedbacks/{feedbackId}": {
+      "schema": "UserFeedback",
+      "description": "Feedbacks and error reports sent by students"
+    },
+    "/communitySigns/{signId}": {
+      "schema": "CommunitySign",
+      "description": "Community taught signs catalog"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "SystemAnnouncement",
+      "description": "Official announcements for all learners"
+    }
+  }
+}

@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny Catch-all)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email != null && request.auth.token.email_verified == true && request.auth.token.email.matches('.*admin.*'))
+      );
+    }
+
+    function isValidUserProfile(data) {
+      return data.username is string && data.username.size() >= 1 && data.username.size() <= 64 &&
+        data.syncCode is string && data.syncCode.size() <= 32 &&
+        data.xp is number && data.xp >= 0 &&
+        data.level is number && data.level >= 1 &&
+        data.gems is number && data.gems >= 0 &&
+        (!('bio' in data) || (data.bio is string && data.bio.size() <= 250)) &&
+        (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 500));
+    }
+
+    function isValidFeedback(data) {
+      return data.username is string && data.username.size() >= 1 && data.username.size() <= 64 &&
+        data.type is string && data.type in ['sugestao', 'erro', 'reclamacao', 'elogio'] &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 2000 &&
+        data.status is string && data.status in ['pendente', 'em_analise', 'resolvido', 'arquivado'];
+    }
+
+    function isValidCommunitySign(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 64 &&
+        data.meaning is string && data.meaning.size() >= 1 && data.meaning.size() <= 500 &&
+        data.teacherName is string && data.teacherName.size() >= 1 && data.teacherName.size() <= 64;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 1000 &&
+        data.type is string && data.type in ['info', 'celebration', 'alert', 'event'] &&
+        data.active is bool;
+    }
+
+    // 1. User Profiles Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(userId) && isValidUserProfile(incoming());
+      allow update: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin()) && isValidUserProfile(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // 2. Feedbacks Collection
+    match /feedbacks/{feedbackId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(feedbackId) && isValidFeedback(incoming());
+      allow update, delete: if isAdmin();
+    }
+
+    // 3. Community Taught Signs
+    match /communitySigns/{signId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(signId) && isValidCommunitySign(incoming());
+      allow update, delete: if isAdmin();
+    }
+
+    // 4. Announcements
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // 5. Admins list
+    match /admins/{adminId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

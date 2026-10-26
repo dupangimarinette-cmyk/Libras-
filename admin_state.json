@@ -1,0 +1,334 @@
+{
+  "adminCredentials": {
+    "username": "admin",
+    "passwordHash": "libras2026"
+  },
+  "mediaItems": [],
+  "customModules": [],
+  "moduleOverrides": {},
+  "deletedModuleIds": [
+    "mod_custom_1792240643873"
+  ],
+  "customSigns": [],
+  "editedSigns": {},
+  "deletedSignIds": [
+    "sign_custom_1792240649949"
+  ],
+  "chestOverrides": {},
+  "promoCodes": [
+    {
+      "id": "promo_1792417330820",
+      "code": "BAUMAGICO",
+      "rewardGems": 200,
+      "rewardXp": 100,
+      "rewardHearts": 5,
+      "rewardChests": 2,
+      "maxUses": 100,
+      "usedCount": 2,
+      "active": true,
+      "expiresAt": "2026-12-31T23:59:59.000Z",
+      "redeemedUsers": [
+        "maria_libras",
+        "outro_aluno"
+      ],
+      "createdAt": "2026-10-19T13:42:10.820Z",
+      "createdBy": "Administrador",
+      "description": "Baús mágicos da comunidade",
+      "lastRedeemedAt": "2026-10-19T13:42:23.895Z"
+    },
+    {
+      "id": "promo_1",
+      "code": "LIBRAS2026",
+      "rewardGems": 250,
+      "rewardXp": 150,
+      "rewardHearts": 5,
+      "maxUses": 1000,
+      "usedCount": 15,
+      "active": true,
+      "createdAt": "2026-10-16T16:07:28.721Z",
+      "createdBy": "Administração LibrasGo",
+      "description": "Código de boas-vindas da temporada 2026."
+    },
+    {
+      "id": "promo_2",
+      "code": "MESTRE",
+      "rewardGems": 500,
+      "rewardXp": 300,
+      "rewardHearts": 5,
+      "maxUses": 500,
+      "usedCount": 42,
+      "active": true,
+      "createdAt": "2026-10-16T16:07:28.721Z",
+      "createdBy": "Administração LibrasGo",
+      "description": "Bônus especial de dedicação aos estudos."
+    }
+  ],
+  "announcements": [
+    {
+      "id": "ann_1",
+      "title": "🎉 Bem-vindo ao LibrasGo Atualizado!",
+      "message": "Novos 15 módulos de atividades, loja de baús misteriosos, personalização de mascote e estúdio AR disponíveis!",
+      "type": "celebration",
+      "active": true,
+      "createdAt": "2026-10-16T16:07:28.721Z",
+      "ctaText": "Ver Trilha",
+      "ctaTab": "path"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "log_1792927978686_8uch0",
+      "timestamp": "2026-10-25T11:32:58.686Z",
+      "action": "Novo Aluno Registrado",
+      "details": "Novo estudante cadastrado no sistema: \"TesterAutoExit\" com código LIB-TEST-AUTOEXIT",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792927450242_cluze",
+      "timestamp": "2026-10-25T11:24:10.242Z",
+      "action": "Novo Aluno Registrado",
+      "details": "Novo estudante cadastrado no sistema: \"test\" com código TEST-123",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792848949109_yx028",
+      "timestamp": "2026-10-24T13:35:49.109Z",
+      "action": "Amizade Removida pelo Admin",
+      "details": "Administrador removeu a amizade entre \"Tester\" e \"Brenna Vitoria\".",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792848949106_vljoz",
+      "timestamp": "2026-10-24T13:35:49.106Z",
+      "action": "Desafio Cancelado pelo Admin",
+      "details": "Administrador excluiu o desafio \"chal_adm_1792848949099_tm89\" de Tester, Brenna Vitoria.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792848949100_8xvkn",
+      "timestamp": "2026-10-24T13:35:49.100Z",
+      "action": "Desafio Atribuído pelo Admin",
+      "details": "Administrador criou duelo semanal de 300 XP entre \"Tester\" e \"Brenna Vitoria\".",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792848949096_6oqwe",
+      "timestamp": "2026-10-24T13:35:49.096Z",
+      "action": "Amizade Vinculada pelo Admin",
+      "details": "Administrador adicionou vínculo de amizade entre \"Tester\" e \"Brenna Vitoria\".",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792848896725_87e7e",
+      "timestamp": "2026-10-24T13:34:56.725Z",
+      "action": "Amizade Removida pelo Admin",
+      "details": "Administrador removeu a amizade entre \"Tester\" e \"Brenna Vitoria\".",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792848896716_leylm",
+      "timestamp": "2026-10-24T13:34:56.716Z",
+      "action": "Amizade Vinculada pelo Admin",
+      "details": "Administrador adicionou vínculo de amizade entre \"Tester\" e \"Brenna Vitoria\".",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792752769510_nht8l",
+      "timestamp": "2026-10-23T10:52:49.510Z",
+      "action": "Conta de Aluno Excluída",
+      "details": "Aluno \"novoalunonivelum\" removido permanentemente do banco de dados (2 chaves limpas).",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792752769504_z7zu2",
+      "timestamp": "2026-10-23T10:52:49.504Z",
+      "action": "Novo Aluno Registrado",
+      "details": "Novo estudante cadastrado no sistema: \"NovoAlunoNivelUm\" com código LIB-9901",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792752769500_483b6",
+      "timestamp": "2026-10-23T10:52:49.500Z",
+      "action": "Feedback Removido",
+      "details": "Feedback ID \"fb_1792752769491_pnge\" excluído pelo administrador.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792752769492_whotx",
+      "timestamp": "2026-10-23T10:52:49.492Z",
+      "action": "Novo Feedback Recebido",
+      "details": "Feedback de AlunoTesteReal [SUGESTAO]: \"Teste de Exclusao de Feedback\"",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792672806283_5v7yb",
+      "timestamp": "2026-10-22T12:40:06.283Z",
+      "action": "Feedback Atualizado",
+      "details": "Feedback ID \"fb_1792672798796_zjk0\" atualizado para status \"em_analise\".",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792672798797_7n59g",
+      "timestamp": "2026-10-22T12:39:58.797Z",
+      "action": "Novo Feedback Recebido",
+      "details": "Feedback de Tester [SUGESTAO]: \"Adicionar mais sinais de culinária\"",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792417361549_qcrkn",
+      "timestamp": "2026-10-19T13:42:41.549Z",
+      "action": "Cupom Excluído",
+      "details": "Código \"EXPIRADO10\" removido.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792417355695_7nb5n",
+      "timestamp": "2026-10-19T13:42:35.695Z",
+      "action": "Cupom Criado",
+      "details": "Novo cupom \"EXPIRADO10\" (+50 gemas, +0 baús) criado.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792417352558_lik3r",
+      "timestamp": "2026-10-19T13:42:32.558Z",
+      "action": "Cupom Ativado/Atualizado",
+      "details": "Código \"BAUMAGICO\" atualizado (Ativo: true, Limite: 100).",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792417346852_jw1jx",
+      "timestamp": "2026-10-19T13:42:26.852Z",
+      "action": "Cupom Desativado",
+      "details": "Código \"BAUMAGICO\" atualizado (Ativo: false, Limite: 100).",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792417343896_zkde6",
+      "timestamp": "2026-10-19T13:42:23.896Z",
+      "action": "Cupom Resgatado",
+      "details": "Usuário \"outro_aluno\" resgatou o código \"BAUMAGICO\" (+200 Diamantes 💎, +100 XP ⚡, +5 Vidas ❤️, +2 Baús Misteriosos 🎁).",
+      "adminName": "Aluno"
+    },
+    {
+      "id": "log_1792417334095_8kh13",
+      "timestamp": "2026-10-19T13:42:14.095Z",
+      "action": "Cupom Resgatado",
+      "details": "Usuário \"maria_libras\" resgatou o código \"BAUMAGICO\" (+200 Diamantes 💎, +100 XP ⚡, +5 Vidas ❤️, +2 Baús Misteriosos 🎁).",
+      "adminName": "Aluno"
+    },
+    {
+      "id": "log_1792417330820_x5huk",
+      "timestamp": "2026-10-19T13:42:10.820Z",
+      "action": "Cupom Criado",
+      "details": "Novo cupom \"BAUMAGICO\" (+200 gemas, +2 baús) criado.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792241327629_s59ax",
+      "timestamp": "2026-10-17T12:48:47.629Z",
+      "action": "Mídia Removida",
+      "details": "Mídia ID \"media_1792241319698\" excluída.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792241319699_ee8os",
+      "timestamp": "2026-10-17T12:48:39.699Z",
+      "action": "Mídia Adicionada",
+      "details": "Mídia \"Vídeo Demonstrativo de Boas-Vindas\" (video) salva e sincronizada.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792240731465_ny935",
+      "timestamp": "2026-10-17T12:38:51.465Z",
+      "action": "Mídia Removida",
+      "details": "Mídia ID \"media_img_pose_a\" excluída.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792240729313_vav6g",
+      "timestamp": "2026-10-17T12:38:49.313Z",
+      "action": "Mídia Removida",
+      "details": "Mídia ID \"media_yt_saudacoes\" excluída.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792240727740_m3wrd",
+      "timestamp": "2026-10-17T12:38:47.740Z",
+      "action": "Mídia Removida",
+      "details": "Mídia ID \"media_yt_alfabeto\" excluída.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792240707232_7mjyf",
+      "timestamp": "2026-10-17T12:38:27.232Z",
+      "action": "Login Administrativo",
+      "details": "Administrador \"admin\" acessou o painel com sucesso.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_1792240653037_r19yd",
+      "timestamp": "2026-10-17T12:37:33.037Z",
+      "action": "Sinal de Libras Excluído",
+      "details": "Sinal ID \"sign_custom_1792240649949\" removido.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792240649949_yadeq",
+      "timestamp": "2026-10-17T12:37:29.949Z",
+      "action": "Sinal de Libras Adicionado",
+      "details": "Novo sinal \"Sinal Teste\" cadastrado no LibrasDex.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792240647214_pg6qi",
+      "timestamp": "2026-10-17T12:37:27.214Z",
+      "action": "Unidade Removida",
+      "details": "Unidade ID \"mod_custom_1792240643873\" foi excluída permanentemente.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792240643874_fjeqo",
+      "timestamp": "2026-10-17T12:37:23.874Z",
+      "action": "Unidade Criada",
+      "details": "Nova unidade \"Módulo Teste Cloud Sync\" adicionada e sincronizada.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1792166884916_7iwkw",
+      "timestamp": "2026-10-16T16:08:04.916Z",
+      "action": "Cupom Resgatado",
+      "details": "O usuário \"Tester\" resgatou o cupom \"LIBRAS2026\" (+250 Gemas, +150 XP).",
+      "adminName": "Aluno"
+    },
+    {
+      "id": "log_1792166869501_oojwm",
+      "timestamp": "2026-10-16T16:07:49.501Z",
+      "action": "Login Administrativo",
+      "details": "Administrador \"admin\" acessou o painel de controle.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_init",
+      "timestamp": "2026-10-16T16:07:28.721Z",
+      "action": "Sistema Inicializado",
+      "details": "Serviço de administração configurado com permissões de gestão completa.",
+      "adminName": "Sistema"
+    }
+  ],
+  "feedbacks": [
+    {
+      "id": "fb_1792672798796_zjk0",
+      "username": "Tester",
+      "type": "sugestao",
+      "title": "Adicionar mais sinais de culinária",
+      "description": "Gostaria de praticar sinais para alimentos e bebidas na trilha de aprendizado.",
+      "priority": "media",
+      "status": "em_analise",
+      "createdAt": "2026-10-22T12:39:58.796Z",
+      "adminReply": "Excelente sugestão! Já estamos catalogando uma unidade dedicada à culinária e alimentos.",
+      "repliedAt": "2026-10-22T12:40:06.283Z"
+    }
+  ],
+  "lastContentVersion": 1792927978686,
+  "lastUpdatedAt": "2026-10-25T11:32:58.686Z"
+}

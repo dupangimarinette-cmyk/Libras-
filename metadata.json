@@ -1,0 +1,6 @@
+{
+  "name": "LibrasGo - Aprenda Libras com Realidade Aumentada",
+  "description": "Aplicativo gamificado estilo Duolingo para aprender LIBRAS com feedback instantâneo via câmera e realidade aumentada, lições diárias, ofensiva e rankings globais.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
