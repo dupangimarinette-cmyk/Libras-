@@ -148,6 +148,9 @@ export interface UserStats {
     glasses: string;
     skin: string;
   };
+  // Molduras de Perfil (Desbloqueadas por Medalhas)
+  equippedFrame?: string;
+  unlockedFrames?: string[];
   // Powerups & Bônus de XP (Loja Premium)
   xpBoostUntil?: string; // ISO timestamp
   hasHeartShield?: boolean; // Protege contra próximo erro
@@ -514,3 +517,38 @@ export interface TaughtSign {
   practiceCount: number;
   bestAccuracy: number;
 }
+
+export type FacialExpressionCategory =
+  | 'interrogativas'
+  | 'afirmacao_negacao'
+  | 'intensidade_emocao'
+  | 'gramatical'
+  | 'cotidiano'
+  | 'sentimentos';
+
+export interface TaughtFacialExpression {
+  id: string;
+  username: string;
+  syncCode?: string;
+  name: string;
+  description: string;
+  category: FacialExpressionCategory;
+  imageUrl: string;
+  parameters: {
+    eyebrows: EyebrowsState;
+    headMovement: HeadMovementType;
+    mouth: MouthState;
+    notes?: string;
+  };
+  aiAnalysis?: {
+    confidence: number;
+    feedback: string;
+    detectedFeatures: string[];
+    validatedByAI: boolean;
+  };
+  createdAt: string;
+  updatedAt?: string;
+  practiceCount?: number;
+  bestAccuracy?: number;
+}
+

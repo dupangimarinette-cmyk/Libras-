@@ -1,4 +1,5 @@
 import { UserStats } from '../types/libras';
+import { userFetch } from './userAuth';
 
 export interface PurchaseResult {
   success: boolean;
@@ -28,11 +29,11 @@ export const shopService = {
     itemName: string;
   }): Promise<PurchaseResult> {
     try {
-      const res = await fetch('/api/shop/purchase', {
+      const res = await userFetch('/api/shop/purchase', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
-      });
+      }, { username: params.username, syncCode: params.syncCode });
 
       const data = await res.json();
       return data;
@@ -49,11 +50,11 @@ export const shopService = {
    */
   async claimDailyBonus(username: string, syncCode?: string): Promise<DailyClaimResult> {
     try {
-      const res = await fetch('/api/rewards/daily-claim', {
+      const res = await userFetch('/api/rewards/daily-claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, syncCode }),
-      });
+      }, { username, syncCode });
 
       const data = await res.json();
       return data;

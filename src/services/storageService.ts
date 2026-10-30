@@ -1,6 +1,8 @@
 import { UserStats, DailyMission, LeaderboardEntry, FriendUser, WeeklyChallenge, FriendRequest } from '../types/libras';
 import { INITIAL_DAILY_MISSIONS } from '../data/missionsData';
 import { INITIAL_LEADERBOARD } from '../data/mockLeaderboard';
+import { userFetch } from './userAuth';
+import { generateSyncCode } from '../utils/syncCode';
 
 const STORAGE_KEY_STATS = 'librasgo_user_stats';
 const STORAGE_KEY_MISSIONS = 'librasgo_missions';
@@ -12,6 +14,7 @@ export interface QuickProfile {
   username: string;
   avatarUrl: string;
   lastActive: string;
+  role?: 'admin' | 'learner';
 }
 
 const DEFAULT_STATS: UserStats = {
@@ -35,7 +38,7 @@ const DEFAULT_STATS: UserStats = {
   profileColor: '#10b981',
   soundEnabled: true,
   hapticEnabled: true,
-  syncCode: 'LIB-' + Math.floor(1000 + Math.random() * 9000),
+  syncCode: generateSyncCode(),
   lastCloudSynced: undefined,
   activeTitle: 'Aprendiz Curioso',
   unlockedTitles: ['Aprendiz Curioso'],
@@ -106,10 +109,10 @@ export const storageService = {
   ): Promise<{ success: boolean; syncCode: string }> {
     const currentStats = stats || this.getUserStats();
     const currentMissions = missions || this.getMissions();
-    const code = currentStats.syncCode || 'LIB-' + Math.floor(1000 + Math.random() * 9000);
+    const code = currentStats.syncCode || generateSyncCode();
 
     try {
-      const res = await fetch('/api/sync/save', {
+      const res = await userFetch('/api/sync/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -118,7 +121,7 @@ export const storageService = {
           userStats: { ...currentStats, syncCode: code, lastCloudSynced: new Date().toISOString() },
           missions: currentMissions,
         }),
-      });
+      }, { username: currentStats.username, syncCode: code });
 
       if (res.ok) {
         const data = await res.json();
@@ -150,7 +153,7 @@ export const storageService = {
     }
 
     try {
-      const res = await fetch(`/api/sync/load/${encodeURIComponent(trimmed)}`);
+      const res = await userFetch(`/api/sync/load/${encodeURIComponent(trimmed)}`, {}, { username: trimmed, syncCode: trimmed });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         return {
@@ -317,32 +320,52 @@ export const storageService = {
     try {
       const data = localStorage.getItem(STORAGE_KEY_PROFILES);
       if (data) {
-        return JSON.parse(data);
+        const parsed: QuickProfile[] = JSON.parse(data);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter((p) => {
+            const name = String(p?.username || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+            return Boolean(name) && name !== 'voce (aprendiz)' && name !== 'marinette' && name !== 'carlos andrade real' &&
+              !/^(bot_|testbot|fake_|ai_|ia_)/.test(name) && name !== 'robot' && name !== 'perfil de ia';
+          });
+        }
       }
     } catch {
       // ignore
     }
     return [
       {
-        username: 'Mariana',
-        avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+        username: 'admin',
+        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
         lastActive: 'Hoje',
+        role: 'admin',
       },
       {
-        username: 'Lucas',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        username: 'Brenna Vitoria',
+        avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
         lastActive: 'Ontem',
+        role: 'learner',
+      },
+      {
+        username: 'AlunoTeste',
+        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+        lastActive: 'Hoje',
+        role: 'learner',
       },
     ];
   },
 
-  saveProfile(username: string, avatarUrl: string): void {
-    const profiles = this.getSavedProfiles();
-    const existingIndex = profiles.findIndex((p) => p.username.toLowerCase() === username.toLowerCase());
+  saveProfile(username: string, avatarUrl: string, role?: 'admin' | 'learner'): void {
+    const clean = username.trim();
+    const normalized = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (!clean || ['voce (aprendiz)', 'marinette', 'carlos andrade real'].includes(normalized) || /^(bot_|testbot|fake_|ai_|ia_)/.test(normalized)) return;
+    const profiles = this.getSavedProfiles().filter((p) => !['Você (Aprendiz)', 'Marinette', 'Carlos Andrade Real'].includes(p.username));
+    const existingIndex = profiles.findIndex((p) => p.username.toLowerCase() === clean.toLowerCase());
+    const isActuallyAdmin = role === 'admin' || normalized === 'admin';
     const newEntry: QuickProfile = {
-      username,
+      username: clean,
       avatarUrl,
       lastActive: 'Agora',
+      role: isActuallyAdmin ? 'admin' : (role || 'learner'),
     };
 
     if (existingIndex >= 0) {
@@ -352,7 +375,7 @@ export const storageService = {
     }
 
     try {
-      localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(profiles.slice(0, 6)));
+      localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(profiles.slice(0, 8)));
     } catch {
       // ignore
     }

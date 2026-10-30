@@ -11,8 +11,9 @@ import {
   AdminRealtimeEvent,
 } from '../types/libras';
 import { MYSTERY_CHESTS } from '../data/shopCatalogData';
+import { adminFetch, STORAGE_ADMIN_SESSION } from './adminFetch';
+import { userFetch } from './userAuth';
 
-const STORAGE_ADMIN_SESSION = 'librasgo_admin_session';
 const STORAGE_ADMIN_CHESTS = 'librasgo_admin_chests';
 const STORAGE_ADMIN_MODULES = 'librasgo_admin_modules';
 const STORAGE_ADMIN_MEDIA = 'librasgo_admin_media';
@@ -41,6 +42,7 @@ export interface AdminUserRecord {
   challengesCount?: number;
   friends?: any[];
   weeklyChallenges?: any[];
+  role?: string;
 }
 
 export interface RealtimeFeedResponse {
@@ -74,10 +76,13 @@ export const adminService = {
     return null;
   },
 
-  async loginAdmin(username: string, password?: string): Promise<{ success: boolean; session?: AdminSession; message?: string }> {
+  async loginAdmin(username: string, password?: string): Promise<{ success: boolean; session?: AdminSession; profile?: any; message?: string }> {
     const cleanUser = username.trim();
     if (cleanUser.length < 2) {
       return { success: false, message: 'Digite um nome de administrador com pelo menos 2 caracteres.' };
+    }
+    if (!password) {
+      return { success: false, message: 'Digite a senha do administrador.' };
     }
 
     try {
@@ -89,33 +94,35 @@ export const adminService = {
       const data = await res.json();
       if (data.success && data.session) {
         localStorage.setItem(STORAGE_ADMIN_SESSION, JSON.stringify(data.session));
-        return { success: true, session: data.session };
+        return { success: true, session: data.session, profile: data.profile };
       }
       return { success: false, message: data.message || 'Erro ao realizar login.' };
     } catch {
-      // Fallback for local/offline testing - allow login with username
-      const fallbackSession: AdminSession = {
-        token: 'adm_local_' + Date.now(),
-        username: cleanUser,
-        role: 'admin',
-        loggedInAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        permissions: [
-          'manage_users',
-          'manage_activities',
-          'manage_media',
-          'manage_rewards',
-          'manage_content',
-        ],
-      };
-      localStorage.setItem(STORAGE_ADMIN_SESSION, JSON.stringify(fallbackSession));
-      return { success: true, session: fallbackSession };
+      return { success: false, message: 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.' };
+    }
+  },
+
+  async recoverAdminPassword(params: {
+    authorizedEmail?: string;
+    syncCode?: string;
+    newPassword: string;
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetch('/api/admin/auth/recover-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+      return data;
+    } catch {
+      return { success: false, message: 'Não foi possível conectar ao servidor para recuperar a senha.' };
     }
   },
 
   async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch('/api/admin/auth/change-password', {
+      const res = await adminFetch('/api/admin/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword, newPassword }),
@@ -123,18 +130,31 @@ export const adminService = {
       const data = await res.json();
       return { success: !!data.success, message: data.message };
     } catch {
-      return { success: true, message: 'Senha atualizada com sucesso no ambiente local!' };
+      return { success: false, message: 'Não foi possível conectar ao servidor para alterar a senha.' };
     }
   },
 
   logoutAdmin(): void {
+    // Avisa o servidor (sem bloquear) e remove a sessão local.
+    try {
+      const raw = localStorage.getItem(STORAGE_ADMIN_SESSION);
+      const token = raw ? JSON.parse(raw)?.token : '';
+      if (token) {
+        fetch('/api/admin/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
     localStorage.removeItem(STORAGE_ADMIN_SESSION);
   },
 
   // Users Management
   async fetchUsers(): Promise<AdminUserRecord[]> {
     try {
-      const res = await fetch('/api/admin/users');
+      const res = await adminFetch('/api/admin/users');
       const data = await res.json();
       if (data.success && Array.isArray(data.users)) {
         return data.users;
@@ -153,7 +173,7 @@ export const adminService = {
     friendRequestsSent?: any[];
   }> {
     try {
-      const res = await fetch(`/api/admin/users/${encodeURIComponent(username)}/social`);
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(username)}/social`);
       const data = await res.json();
       if (data.success) {
         return {
@@ -172,7 +192,7 @@ export const adminService = {
 
   async addUserFriend(username: string, friendUsername: string): Promise<{ success: boolean; message: string; friends?: any[] }> {
     try {
-      const res = await fetch(`/api/admin/users/${encodeURIComponent(username)}/friends/add`, {
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(username)}/friends/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ friendUsername }),
@@ -186,7 +206,7 @@ export const adminService = {
 
   async removeUserFriend(username: string, friendUsername: string): Promise<{ success: boolean; message: string; friends?: any[] }> {
     try {
-      const res = await fetch(`/api/admin/users/${encodeURIComponent(username)}/friends/remove`, {
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(username)}/friends/remove`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ friendUsername }),
@@ -204,7 +224,7 @@ export const adminService = {
     goalXp: number
   ): Promise<{ success: boolean; message: string; challenge?: any; weeklyChallenges?: any[] }> {
     try {
-      const res = await fetch(`/api/admin/users/${encodeURIComponent(username)}/challenges/add`, {
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(username)}/challenges/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetUsername, goalXp }),
@@ -223,7 +243,7 @@ export const adminService = {
 
   async deleteUserChallenge(username: string, challengeId: string): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/users/${encodeURIComponent(username)}/challenges/${encodeURIComponent(challengeId)}`, {
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(username)}/challenges/${encodeURIComponent(challengeId)}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -235,7 +255,7 @@ export const adminService = {
 
   async fetchRealtimeFeed(): Promise<RealtimeFeedResponse | null> {
     try {
-      const res = await fetch('/api/admin/realtime-feed');
+      const res = await adminFetch('/api/admin/realtime-feed');
       if (res.ok) {
         return (await res.json()) as RealtimeFeedResponse;
       }
@@ -253,7 +273,7 @@ export const adminService = {
     resetProgress?: boolean;
   }): Promise<boolean> {
     try {
-      const res = await fetch('/api/admin/users/adjust', {
+      const res = await adminFetch('/api/admin/users/adjust', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
@@ -270,7 +290,7 @@ export const adminService = {
       const url = username
         ? `/api/admin/users/${encodeURIComponent(key)}?username=${encodeURIComponent(username)}`
         : `/api/admin/users/${encodeURIComponent(key)}`;
-      const res = await fetch(url, {
+      const res = await adminFetch(url, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -283,7 +303,7 @@ export const adminService = {
   // Media Management
   async fetchMedia(): Promise<MediaItem[]> {
     try {
-      const res = await fetch('/api/admin/media');
+      const res = await adminFetch('/api/admin/media');
       const data = await res.json();
       if (data.success && Array.isArray(data.media)) {
         return data.media;
@@ -337,7 +357,7 @@ export const adminService = {
     signId?: string;
   }): Promise<MediaItem | null> {
     try {
-      const res = await fetch('/api/admin/media', {
+      const res = await adminFetch('/api/admin/media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item),
@@ -364,7 +384,7 @@ export const adminService = {
 
   async deleteMedia(id: string): Promise<boolean> {
     try {
-      const res = await fetch(`/api/admin/media/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/media/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -380,7 +400,7 @@ export const adminService = {
   // Promo Codes & Rewards
   async fetchPromoCodes(): Promise<PromoCode[]> {
     try {
-      const res = await fetch('/api/admin/promo-codes');
+      const res = await adminFetch('/api/admin/promo-codes');
       const data = await res.json();
       if (data.success && Array.isArray(data.promoCodes)) {
         return data.promoCodes;
@@ -429,7 +449,7 @@ export const adminService = {
     description: string;
   }): Promise<{ success: boolean; promoCode?: PromoCode; message?: string }> {
     try {
-      const res = await fetch('/api/admin/promo-codes', {
+      const res = await adminFetch('/api/admin/promo-codes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(promo),
@@ -443,7 +463,7 @@ export const adminService = {
 
   async updatePromoCode(id: string, updates: Partial<PromoCode>): Promise<{ success: boolean; promoCode?: PromoCode; message?: string }> {
     try {
-      const res = await fetch(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -461,7 +481,7 @@ export const adminService = {
 
   async deletePromoCode(id: string): Promise<boolean> {
     try {
-      const res = await fetch(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -478,11 +498,11 @@ export const adminService = {
     promoCode?: { id?: string; code: string; description?: string };
   }> {
     try {
-      const res = await fetch('/api/promo/redeem', {
+      const res = await userFetch('/api/promo/redeem', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, username, syncCode }),
-      });
+      }, { username, syncCode });
       const data = await res.json();
       return data;
     } catch {
@@ -556,7 +576,7 @@ export const adminService = {
     ctaTab?: string;
   }): Promise<boolean> {
     try {
-      const res = await fetch('/api/admin/announcements', {
+      const res = await adminFetch('/api/admin/announcements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ann),
@@ -574,7 +594,7 @@ export const adminService = {
   // Audit Logs
   async fetchAuditLogs(): Promise<AdminAuditLog[]> {
     try {
-      const res = await fetch('/api/admin/logs');
+      const res = await adminFetch('/api/admin/logs');
       const data = await res.json();
       if (data.success && Array.isArray(data.logs)) {
         return data.logs;
@@ -612,7 +632,7 @@ export const adminService = {
 
     // Also persist directly to shared cloud database
     try {
-      await fetch(`/api/admin/modules/${encodeURIComponent(moduleId)}`, {
+      await adminFetch(`/api/admin/modules/${encodeURIComponent(moduleId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -654,7 +674,7 @@ export const adminService = {
           description: c.description,
         };
       });
-      await fetch('/api/admin/chests', {
+      await adminFetch('/api/admin/chests', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chestOverrides: overrides }),
@@ -712,7 +732,7 @@ export const adminService = {
     adminReply?: string
   ): Promise<{ success: boolean; message: string; feedback?: UserFeedback }> {
     try {
-      const res = await fetch(`/api/admin/feedbacks/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/feedbacks/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, adminReply }),
@@ -726,7 +746,7 @@ export const adminService = {
 
   async deleteFeedback(id: string): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/feedbacks/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/feedbacks/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
       const data = await res.json();

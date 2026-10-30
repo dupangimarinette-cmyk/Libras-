@@ -20,3 +20,22 @@
 10. **Payload 10 (Forged Announcement)**: Non-admin writing to `/announcements/ann_1`. (Must be DENIED)
 11. **Payload 11 (Blanket Collection Scraping)**: Reading all user profiles without filtering. (Must be DENIED; split/owner isolation)
 12. **Payload 12 (Ghost Field Injection)**: Creating a user document containing undocumented field `{"hack": 123}` violating strict schema. (Must be DENIED)
+
+## 3. Admin API (servidor Express)
+1. Todas as rotas `/api/admin/*` exigem `Authorization: Bearer <token>`; só `/api/admin/auth/login` é pública.
+2. Login com usuário + senha. Senha guardada apenas como hash `scrypt` (sal por senha); nunca em texto puro.
+3. Senha inicial: variável `ADMIN_PASSWORD` ou, se ausente, senha aleatória mostrada uma vez no log do servidor.
+4. Máximo de 5 tentativas de login por IP a cada 15 minutos; falhas ficam no log de auditoria.
+5. Sessões de 24h, em memória (reiniciar o servidor exige novo login). Trocar a senha encerra as outras sessões.
+6. Firestore: `isAdmin()` só vale para uid cadastrado em `/admins/{uid}`; e-mail nunca concede privilégio.
+
+## 4. Contas de alunos (Etapa A)
+1. Cada conta tem uma chave secreta (guardada como hash no servidor, até 5 aparelhos). O app envia `X-User-Key`.
+   Salvar progresso, comprar, bônus diário, resgatar códigos e gravar/apagar sinais exigem a chave.
+2. Contas antigas (sem chave) recebem a chave no primeiro salvamento depois da atualização.
+3. Restaurar em outro aparelho exige o Código de Sincronização (8 caracteres aleatórios); o nome de usuário sozinho não basta. Limite de 20 tentativas erradas por IP a cada 15 minutos.
+4. O código de sincronização não aparece mais no ranking nem na busca.
+5. Preço da loja vem do catálogo do servidor (com os ajustes de preço de baús feitos pelo admin); o custo enviado pelo app é ignorado.
+6. Limites de salvamento: ganho de diamantes e XP limitado por um crédito que recarrega com o tempo; ofensiva sobe no máximo 1 por dia; a data do bônus diário só avança.
+   Ajuste em `STAT_LIMITS` no `server.ts`.
+7. Limitação conhecida: contas novas podem começar com até 20.000 diamantes / 50.000 XP, e quem tem a chave pode ganhar dentro do crédito. O fim definitivo disso é o servidor conceder XP e moedas ao validar cada lição (Etapa B).

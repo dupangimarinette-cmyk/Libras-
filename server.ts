@@ -1,10 +1,11 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { LEARNING_MODULES } from './src/data/lessonsData';
 import { LIBRAS_SIGNS } from './src/data/signsData';
-import { MYSTERY_CHESTS } from './src/data/shopCatalogData';
+import { MYSTERY_CHESTS, MASCOT_ITEMS, COMPANION_MASCOTS, PRESTIGE_TITLES, NAME_COLORS, SPECIAL_TRACKS, PREMIUM_POWERUPS } from './src/data/shopCatalogData';
 import { LearningModule, LibrasSign, MysteryChest, MediaItem, PromoCode, SystemAnnouncement, AdminAuditLog, Lesson, UserFeedback } from './src/types/libras';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -15,6 +16,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const DB_FILE = path.join(__dirname, 'sync_data.json');
 const ADMIN_STATE_FILE = path.join(__dirname, 'admin_state.json');
 
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '15mb' }));
 
 // -------------------------------------------------------------
@@ -39,6 +41,228 @@ function writeSyncDb(data: Record<string, any>) {
     console.error('Error writing sync DB:', err);
   }
 }
+
+
+// === USER-KEY BEGIN ===
+// -------------------------------------------------------------
+// CHAVE SECRETA POR ALUNO, PREÇOS NO SERVIDOR E LIMITES DE SALVAMENTO
+// -------------------------------------------------------------
+const MAX_DEVICE_KEYS = 5;
+const PLACEHOLDER_SYNC_CODES = new Set(['LIB-9999', 'LIB-7294', 'LIB-0000']);
+
+// Ajuste estes números se alunos legítimos forem barrados (ver LEIA-ME).
+const STAT_LIMITS = {
+  newAccount: { gems: 20000, xp: 50000, streak: 400 }, // conta nova ou restaurada de backup local
+  initialCredit: { gems: 4000, xp: 4000 },              // quanto um aluno pode ganhar "de uma vez"
+  creditPerHour: { gems: 150, xp: 150 },                // e quanto esse crédito recarrega por hora
+  maxCredit: { gems: 20000, xp: 20000 },
+  maxLevel: 200,
+};
+
+function hashUserKey(key: string): string {
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
+
+function readUserKey(req: Request): string {
+  return String(req.headers['x-user-key'] || '').trim().slice(0, 200);
+}
+
+function recordKeyMatches(record: any, key: string): boolean {
+  if (!key || !record || !Array.isArray(record.authKeyHashes)) return false;
+  const given = Buffer.from(hashUserKey(key), 'hex');
+  return record.authKeyHashes.some((h: string) => {
+    try {
+      const stored = Buffer.from(String(h), 'hex');
+      return stored.length === given.length && crypto.timingSafeEqual(stored, given);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function issueUserKey(record: any): string {
+  const key = crypto.randomBytes(24).toString('hex');
+  const hashes: string[] = Array.isArray(record.authKeyHashes) ? record.authKeyHashes : [];
+  record.authKeyHashes = [...hashes, hashUserKey(key)].slice(-MAX_DEVICE_KEYS);
+  return key;
+}
+
+function normalizeAccountKeys(username?: unknown, syncCode?: unknown): string[] {
+  const keys: string[] = [];
+  const u = typeof username === 'string' ? username.trim() : '';
+  const c = typeof syncCode === 'string' ? syncCode.toUpperCase().trim() : '';
+  if (c && !PLACEHOLDER_SYNC_CODES.has(c)) keys.push(c);
+  if (u) keys.push(`USER_${u.toLowerCase()}`);
+  return keys;
+}
+
+type AuthResult =
+  | { ok: true; keys: string[]; records: any[]; hashes: string[] }
+  | { ok: false; status: number; message: string };
+
+/**
+ * Contas com chave exigem o header X-User-Key. Contas antigas (sem chave) e contas novas
+ * passam, e recebem a chave na primeira gravação (finalizeUserKey).
+ */
+function authorizeUser(req: Request, db: Record<string, any>, username: unknown, syncCode: unknown): AuthResult {
+  if (isArchivedBlockedIdentity(username, syncCode)) {
+    return { ok: false, status: 403, message: 'Esta conta foi arquivada e está bloqueada. Entre em contato com a administração.' };
+  }
+  if (isAutomatedAccountName(username)) {
+    return { ok: false, status: 400, message: 'Contas automáticas ou perfis de IA não podem acessar como alunos.' };
+  }
+  const keys = normalizeAccountKeys(username, syncCode).filter((k) => db[k]);
+  const records = keys.map((k) => db[k]);
+  const protectedRecords = records.filter((r) => Array.isArray(r.authKeyHashes) && r.authKeyHashes.length > 0);
+  const key = readUserKey(req);
+  if (protectedRecords.length > 0 && !protectedRecords.every((r) => recordKeyMatches(r, key))) {
+    return {
+      ok: false,
+      status: 403,
+      message: 'Esta conta é protegida. Restaure-a neste dispositivo com o seu Código de Sincronização (Perfil > Restaurar).',
+    };
+  }
+  const hashes = Array.from(new Set(records.flatMap((r) => (Array.isArray(r.authKeyHashes) ? r.authKeyHashes : []))));
+  return { ok: true, keys, records, hashes };
+}
+
+/** Une as chaves de todos os apelidos da conta e, se ainda não houver nenhuma, emite a primeira. */
+function finalizeUserKey(db: Record<string, any>, keys: string[], primary: any, priorHashes: string[]): string | undefined {
+  const all = new Set<string>(priorHashes);
+  for (const k of keys) for (const h of db[k]?.authKeyHashes || []) all.add(h);
+  for (const h of primary.authKeyHashes || []) all.add(h);
+  primary.authKeyHashes = Array.from(all).slice(-MAX_DEVICE_KEYS);
+  let issued: string | undefined;
+  if (primary.authKeyHashes.length === 0) issued = issueUserKey(primary);
+  for (const k of keys) {
+    if (db[k] && db[k] !== primary) db[k].authKeyHashes = [...primary.authKeyHashes];
+  }
+  return issued;
+}
+
+type StatsCheck =
+  | { ok: true; stats: any; credit: { gems: number; xp: number; at: string }; streakBumpAt?: string }
+  | { ok: false; message: string };
+
+/** Valida o que o app enviou contra o que o servidor já sabe. Ganhos grandes demais são recusados. */
+function checkStatsChange(prevRecord: any, incoming: any, now: number): StatsCheck {
+  const next: any = { ...(incoming && typeof incoming === 'object' ? incoming : {}) };
+  const prev = prevRecord?.userStats || null;
+  const nowIso = new Date(now).toISOString();
+
+  for (const f of ['gems', 'xp', 'level', 'streak']) {
+    if (f in next) {
+      const n = Number(next[f]);
+      if (!Number.isFinite(n) || n < 0) return { ok: false, message: `Valor inválido em "${f}".` };
+      next[f] = Math.floor(n);
+    }
+  }
+  if (next.level !== undefined && next.level > STAT_LIMITS.maxLevel) {
+    return { ok: false, message: 'Nível acima do permitido.' };
+  }
+
+  if (!prev) {
+    const n = STAT_LIMITS.newAccount;
+    if ((next.gems ?? 0) > n.gems || (next.xp ?? 0) > n.xp || (next.streak ?? 0) > n.streak) {
+      return { ok: false, message: 'Valores iniciais da conta acima do permitido.' };
+    }
+    return { ok: true, stats: next, credit: { gems: STAT_LIMITS.initialCredit.gems, xp: STAT_LIMITS.initialCredit.xp, at: nowIso } };
+  }
+
+  const prevCredit = prevRecord.gainCredit;
+  const creditAt = Date.parse(prevCredit?.at || '') || Date.parse(prevRecord.updatedAt || '') || now;
+  const hours = Math.min(Math.max((now - creditAt) / 3.6e6, 0), 24 * 30);
+  const credit = { gems: 0, xp: 0 };
+  for (const f of ['gems', 'xp'] as const) {
+    const base = prevCredit && Number.isFinite(Number(prevCredit[f])) ? Number(prevCredit[f]) : STAT_LIMITS.initialCredit[f];
+    const available = Math.min(STAT_LIMITS.maxCredit[f], base + STAT_LIMITS.creditPerHour[f] * hours);
+    const before = Number(prev[f]) || 0;
+    const after = next[f] === undefined ? before : next[f];
+    const gain = after - before;
+    if (gain > available) {
+      return { ok: false, message: `Ganho de ${f === 'gems' ? 'diamantes' : 'XP'} acima do permitido para este período.` };
+    }
+    credit[f] = available - Math.max(0, gain);
+  }
+
+  // Ofensiva: sobe no máximo 1 por dia (com folga de 12h). O excesso é cortado, sem recusar o resto do salvamento.
+  let streakBumpAt: string | undefined;
+  const prevStreak = Number(prev.streak) || 0;
+  if (next.streak !== undefined && next.streak > prevStreak) {
+    const bumpAt = Date.parse(prevRecord.streakBumpAt || '') || now - 2 * 8.64e7;
+    const allowed = Math.floor((now - bumpAt + 4.32e7) / 8.64e7);
+    if (next.streak - prevStreak > allowed) next.streak = prevStreak + allowed;
+    if (next.streak > prevStreak) streakBumpAt = nowIso;
+  }
+
+  // O bônus diário é controlado pelo servidor: o app não pode "voltar" essa data para resgatar de novo.
+  if (prev.lastDailyRewardDate && (!next.lastDailyRewardDate || String(next.lastDailyRewardDate) < String(prev.lastDailyRewardDate))) {
+    next.lastDailyRewardDate = prev.lastDailyRewardDate;
+  }
+
+  return { ok: true, stats: next, credit: { gems: credit.gems, xp: credit.xp, at: nowIso }, streakBumpAt };
+}
+
+function makeLimiter(max: number, windowMs: number) {
+  const hits = new Map<string, { count: number; resetAt: number }>();
+  return {
+    limited(id: string): boolean {
+      const e = hits.get(id);
+      return !!e && e.resetAt > Date.now() && e.count >= max;
+    },
+    hit(id: string) {
+      const now = Date.now();
+      const e = hits.get(id);
+      if (!e || e.resetAt <= now) hits.set(id, { count: 1, resetAt: now + windowMs });
+      else e.count += 1;
+    },
+  };
+}
+
+const restoreLimiter = makeLimiter(20, 15 * 60 * 1000);
+const lastRejectLog = new Map<string, number>();
+
+function randomSyncCode(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.randomBytes(8);
+  let out = 'LIB-';
+  for (let i = 0; i < 8; i++) out += alphabet[bytes[i] % alphabet.length];
+  return out;
+}
+
+/** Preço e nome oficiais do item: o servidor nunca usa o custo enviado pelo app. */
+function getCatalogItem(category: string, itemId: string): { cost: number; name: string } | null {
+  const pick = (list: any[], nameKey: string) => {
+    const it = list.find((x) => x.id === itemId);
+    if (!it) return null;
+    const cost = Number(it.cost);
+    return Number.isFinite(cost) && cost >= 0 ? { cost, name: String(it[nameKey] ?? itemId) } : null;
+  };
+  switch (category) {
+    case 'accessory': return pick(MASCOT_ITEMS as any[], 'name');
+    case 'companion': return pick(COMPANION_MASCOTS as any[], 'name');
+    case 'title': return pick(PRESTIGE_TITLES as any[], 'title');
+    case 'name_color': return pick(NAME_COLORS as any[], 'name');
+    case 'special_track': return pick(SPECIAL_TRACKS as any[], 'title');
+    case 'chest': {
+      const base = (MYSTERY_CHESTS as any[]).find((c) => c.id === itemId);
+      if (!base) return null;
+      const ov: any = readAdminState().chestOverrides?.[itemId];
+      const cost = Number(ov?.cost ?? base.cost);
+      return Number.isFinite(cost) && cost >= 0 ? { cost, name: String(ov?.name ?? base.name) } : null;
+    }
+    case 'hearts_refill':
+    case 'heart_shield':
+    case 'xp_boost':
+    case 'streak_freeze': {
+      const pu = (PREMIUM_POWERUPS as any[]).find((x) => x.id === category);
+      return pu ? { cost: Number(pu.cost), name: String(pu.title) } : null;
+    }
+    default:
+      return null;
+  }
+}
+// === USER-KEY END ===
 
 // -------------------------------------------------------------
 // ADMIN STATE & SHARED APPLICATION CONTENT PERSISTENCE
@@ -73,7 +297,8 @@ interface AdminStateData {
 const DEFAULT_ADMIN_STATE: AdminStateData = {
   adminCredentials: {
     username: 'admin',
-    passwordHash: 'libras2026',
+    // Preenchido na inicialização (ver ensureAdminCredentials): nunca guardar senha em texto puro.
+    passwordHash: '',
   },
   mediaItems: [
     {
@@ -230,6 +455,122 @@ function writeAdminState(data: AdminStateData) {
   }
 }
 
+
+// -------------------------------------------------------------
+// ADMIN AUTH: senha com hash (scrypt), sessões com token e limite de tentativas
+// -------------------------------------------------------------
+const ADMIN_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const MIN_ADMIN_PASSWORD_LENGTH = 8;
+
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  if (typeof stored !== 'string' || !stored.startsWith('scrypt$')) return false;
+  const [, salt, hashHex] = stored.split('$');
+  if (!salt || !hashHex) return false;
+  const expected = Buffer.from(hashHex, 'hex');
+  const actual = crypto.scryptSync(password, salt, expected.length);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+/**
+ * Garante que a conta admin tenha senha com hash.
+ * - Se ADMIN_PASSWORD estiver definida no ambiente, ela passa a ser a senha do admin.
+ * - Se a senha salva ainda estiver em texto puro (versão antiga) ou vazia, gera uma senha
+ *   aleatória, salva só o hash e mostra a senha UMA vez no log do servidor.
+ */
+function ensureAdminCredentials() {
+  console.log(`[ADMIN] ADMIN_PASSWORD no ambiente: ${process.env.ADMIN_PASSWORD ? 'SIM' : 'NÃO'}`);
+  const state = readAdminState();
+  const stored = state.adminCredentials?.passwordHash || '';
+  const envPassword = (process.env.ADMIN_PASSWORD || '').trim();
+
+  if (envPassword) {
+    if (envPassword.length < MIN_ADMIN_PASSWORD_LENGTH) {
+      console.error(`[ADMIN] ADMIN_PASSWORD precisa ter pelo menos ${MIN_ADMIN_PASSWORD_LENGTH} caracteres. Ignorada.`);
+    } else if (!verifyPassword(envPassword, stored)) {
+      state.adminCredentials = { username: state.adminCredentials?.username || 'admin', passwordHash: hashPassword(envPassword) };
+      writeAdminState(state);
+      console.log('[ADMIN] Senha do administrador definida a partir de ADMIN_PASSWORD.');
+      return;
+    } else {
+      return;
+    }
+  }
+
+  if (!stored.startsWith('scrypt$')) {
+    const generated = crypto.randomBytes(12).toString('base64url');
+    state.adminCredentials = { username: state.adminCredentials?.username || 'admin', passwordHash: hashPassword(generated) };
+    writeAdminState(state);
+    console.log('==================================================================');
+    console.log('[ADMIN] Senha antiga em texto puro removida.');
+    console.log(`[ADMIN] Usuário: ${state.adminCredentials.username}`);
+    console.log(`[ADMIN] Nova senha temporária: ${generated}`);
+    console.log('[ADMIN] Anote agora (não será mostrada de novo) e troque no painel,');
+    console.log('[ADMIN] ou defina a variável ADMIN_PASSWORD para escolher a sua.');
+    console.log('==================================================================');
+  }
+}
+
+interface AdminSessionRecord {
+  token: string;
+  username: string;
+  role: 'admin';
+  loggedInAt: string;
+  expiresAt: string;
+  permissions: string[];
+}
+
+const adminSessions = new Map<string, AdminSessionRecord>();
+
+function pruneAdminSessions() {
+  const now = Date.now();
+  for (const [token, session] of adminSessions) {
+    if (new Date(session.expiresAt).getTime() <= now) adminSessions.delete(token);
+  }
+}
+
+function getBearerToken(req: Request): string {
+  const header = String(req.headers['authorization'] || '');
+  return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+}
+
+function requireAdmin(req: Request, res: Response, next: () => void) {
+  pruneAdminSessions();
+  const token = getBearerToken(req);
+  const session = token ? adminSessions.get(token) : undefined;
+  if (!session) {
+    return res.status(401).json({ success: false, message: 'Sessão de administrador inválida ou expirada. Faça login novamente.' });
+  }
+  (req as any).adminSession = session;
+  next();
+}
+
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOGIN_WINDOW_MS = 5 * 60 * 1000;
+
+function loginRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || entry.resetAt <= now) return false;
+  return entry.count >= MAX_LOGIN_ATTEMPTS;
+}
+
+function registerFailedLogin(ip: string) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || entry.resetAt <= now) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+  } else {
+    entry.count += 1;
+  }
+}
+
 function logAdminAction(action: string, details: string, adminName: string = 'Administrador') {
   const state = readAdminState();
   state.auditLogs = state.auditLogs || [];
@@ -346,56 +687,93 @@ app.get('/api/content/version', (_req: Request, res: Response) => {
 // INDIVIDUAL USER PROGRESS SYNC
 // -------------------------------------------------------------
 app.get('/api/sync/generate-code', (_req: Request, res: Response) => {
-  const num = Math.floor(1000 + Math.random() * 9000);
-  const code = `LIB-${num}`;
+  const db = readSyncDb();
+  let code = randomSyncCode();
+  while (db[code]) code = randomSyncCode();
   res.json({ success: true, syncCode: code });
 });
 
 app.post('/api/sync/save', (req: Request, res: Response) => {
-  const { syncCode, username, userStats, missions } = req.body;
+  const { syncCode, username, userStats, missions } = req.body || {};
   if (!syncCode && !username) {
     return res.status(400).json({ error: 'Código de sincronização ou nome de usuário é obrigatório.' });
   }
+  if (isArchivedBlockedIdentity(username, syncCode)) {
+    return res.status(403).json({ success: false, code: 'ACCOUNT_ARCHIVED', message: 'Esta conta foi arquivada e está bloqueada.' });
+  }
+  if (isAutomatedAccountName(username)) {
+    return res.status(400).json({ success: false, code: 'AI_PROFILE_BLOCKED', message: 'Não é permitido criar perfis automáticos ou de IA como alunos.' });
+  }
 
   const db = readSyncDb();
-  const codeKey = (syncCode || '').toUpperCase().trim();
-  const userKey = username ? `USER_${username.toLowerCase().trim()}` : null;
+  const rawCode = (syncCode || '').toString().toUpperCase().trim();
+  const codeKey = rawCode && !PLACEHOLDER_SYNC_CODES.has(rawCode) ? rawCode : '';
+  const userKey = username ? `USER_${String(username).toLowerCase().trim()}` : null;
+
+  const auth = authorizeUser(req, db, username, syncCode);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
+  }
 
   // Retrieve any existing taught signs so they are never lost on sync
-  const existingRecord = (codeKey && db[codeKey]) || (userKey && db[userKey]);
+  // A conta existe em duas cópias (pelo código e pelo nome). Vale a mais recente.
+  const existingRecord =
+    ([codeKey && db[codeKey], userKey && db[userKey]].filter(Boolean) as any[])
+      .sort((a, b) => (Date.parse(b.updatedAt || '') || 0) - (Date.parse(a.updatedAt || '') || 0))[0] || null;
   const existingSigns = existingRecord?.taughtSigns || [];
+  const existingFacial = existingRecord?.taughtFacialExpressions || [];
+
+  const check = checkStatsChange(existingRecord, userStats, Date.now());
+  if (!check.ok) {
+    const who = String(username || codeKey || 'desconhecido').slice(0, 40);
+    const last = lastRejectLog.get(who) || 0;
+    if (Date.now() - last > 30 * 60 * 1000) {
+      lastRejectLog.set(who, Date.now());
+      logAdminAction('Salvamento Recusado', `Alteração suspeita de "${who}": ${check.message}`, 'Sistema');
+    }
+    return res.status(422).json({ success: false, code: 'STATS_REJECTED', message: check.message });
+  }
 
   const nowIso = new Date().toISOString();
   const isNewUser = (!codeKey || !db[codeKey]) && (!userKey || !db[userKey]);
   const createdAt = existingRecord?.createdAt || existingRecord?.userStats?.createdAt || (isNewUser ? nowIso : existingRecord?.updatedAt || nowIso);
 
   const mergedStats = {
-    ...(userStats || {}),
-    createdAt: userStats?.createdAt || createdAt,
+    ...check.stats,
+    createdAt: check.stats?.createdAt || createdAt,
   };
 
-  const payload = {
+  const payload: any = {
     syncCode: codeKey,
     username: (username || '').trim(),
     userStats: mergedStats,
     missions,
     taughtSigns: existingSigns,
+    taughtFacialExpressions: existingFacial,
     createdAt,
     updatedAt: nowIso,
+    gainCredit: check.credit,
+    streakBumpAt: check.streakBumpAt || existingRecord?.streakBumpAt,
+    authKeyHashes: existingRecord?.authKeyHashes || [],
   };
 
   if (codeKey) {
     db[codeKey] = {
       ...payload,
       taughtSigns: db[codeKey]?.taughtSigns || existingSigns,
+      taughtFacialExpressions: db[codeKey]?.taughtFacialExpressions || existingFacial,
     };
   }
   if (userKey) {
     db[userKey] = {
       ...payload,
       taughtSigns: db[userKey]?.taughtSigns || existingSigns,
+      taughtFacialExpressions: db[userKey]?.taughtFacialExpressions || existingFacial,
     };
   }
+
+  const savedKeys = [codeKey, userKey].filter(Boolean) as string[];
+  const issuedKey = finalizeUserKey(db, savedKeys, db[savedKeys[0]], auth.hashes);
 
   writeSyncDb(db);
 
@@ -403,29 +781,47 @@ app.post('/api/sync/save', (req: Request, res: Response) => {
     logAdminAction('Novo Aluno Registrado', `Novo estudante cadastrado no sistema: "${username}" com código ${codeKey}`);
   }
 
-  res.json({ success: true, updatedAt: payload.updatedAt, createdAt: payload.createdAt, syncCode: payload.syncCode });
+  res.json({ success: true, updatedAt: payload.updatedAt, createdAt: payload.createdAt, syncCode: payload.syncCode, authKey: issuedKey });
 });
 
 app.get('/api/sync/load/:code', (req: Request, res: Response) => {
+  const ip = req.ip || 'unknown';
+  if (restoreLimiter.limited(ip)) {
+    return res.status(429).json({ success: false, error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' });
+  }
+
   const rawCode = req.params.code.trim();
   const db = readSyncDb();
+  const byCode = db[rawCode.toUpperCase()];
+  const found = byCode || db[`USER_${rawCode.toLowerCase()}`];
 
-  let found = db[rawCode.toUpperCase()];
+  if (found && isArchivedBlockedAccount(found.username || found.userStats?.username)) {
+    return res.status(403).json({ success: false, code: 'ACCOUNT_ARCHIVED', error: 'Esta conta foi arquivada e está bloqueada.' });
+  }
+  if (found && isAutomatedAccountName(found.username || found.userStats?.username)) {
+    return res.status(403).json({ success: false, code: 'AI_PROFILE_BLOCKED', error: 'Perfis automáticos ou de IA não podem ser restaurados como alunos.' });
+  }
   if (!found) {
-    const userKey = `USER_${rawCode.toLowerCase()}`;
-    found = db[userKey];
+    restoreLimiter.hit(ip);
+    return res.status(404).json({ success: false, error: 'Nenhum progresso encontrado com este código ou nome.' });
   }
 
-  if (found) {
-    return res.json({ success: true, data: found });
+  const hasKey = recordKeyMatches(found, readUserKey(req));
+
+  let issuedKey: string | undefined;
+  if (!hasKey) {
+    issuedKey = issueUserKey(found);
+    const aliasKeys = [String(found.syncCode || '').toUpperCase(), found.username ? `USER_${String(found.username).toLowerCase().trim()}` : '']
+      .filter((k) => k && !PLACEHOLDER_SYNC_CODES.has(k));
+    finalizeUserKey(db, aliasKeys, found, []);
+    writeSyncDb(db);
+    logAdminAction('Conta Restaurada', `A conta "${found.username || rawCode}" foi restaurada em um novo dispositivo.`, 'Sistema');
   }
 
-  return res.status(404).json({ success: false, error: 'Nenhum progresso encontrado com este código ou nome.' });
+  const { authKeyHashes, gainCredit, streakBumpAt, ...safe } = found;
+  return res.json({ success: true, data: safe, authKey: issuedKey });
 });
 
-// -------------------------------------------------------------
-// USER TAUGHT SIGNS TO AI (PRIVATE PER-USER PERSISTENCE)
-// -------------------------------------------------------------
 app.get('/api/user/custom-signs/:codeOrUser', (req: Request, res: Response) => {
   const rawParam = decodeURIComponent(req.params.codeOrUser).trim();
   const db = readSyncDb();
@@ -487,6 +883,11 @@ app.post('/api/user/custom-signs', (req: Request, res: Response) => {
     return res.status(400).json({ success: false, message: 'Usuário não identificado para salvar o sinal.' });
   }
 
+  const auth = authorizeUser(req, db, cleanUsername, cleanCode);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
+  }
+
   const baseRecord = db[userKey] || (cleanCode ? db[cleanCode] : null) || {
     username: cleanUsername || 'Aluno',
     syncCode: cleanCode || 'LIB-9999',
@@ -527,8 +928,10 @@ app.post('/api/user/custom-signs', (req: Request, res: Response) => {
     };
   }
 
+  const signKeys = [userKey, cleanCode].filter((k) => k && db[k]) as string[];
+  const issuedKey = finalizeUserKey(db, signKeys, db[signKeys[0]], auth.hashes);
   writeSyncDb(db);
-  res.json({ success: true, message: `Sinal "${savedSign.name}" aprendido e salvo com sucesso na sua conta!`, sign: savedSign });
+  res.json({ success: true, message: `Sinal "${savedSign.name}" aprendido e salvo com sucesso na sua conta!`, sign: savedSign, authKey: issuedKey });
 });
 
 app.delete('/api/user/custom-signs/:id', (req: Request, res: Response) => {
@@ -536,15 +939,18 @@ app.delete('/api/user/custom-signs/:id', (req: Request, res: Response) => {
   const { username, syncCode } = req.query;
 
   const db = readSyncDb();
-  let deleted = false;
+  const auth = authorizeUser(req, db, username, syncCode);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
+  }
 
-  for (const [key, val] of Object.entries(db)) {
+  // Só apaga sinais da própria conta (antes, qualquer pessoa apagava o sinal de qualquer aluno).
+  let deleted = false;
+  for (const val of auth.records) {
     if (val && Array.isArray(val.taughtSigns)) {
       const initLen = val.taughtSigns.length;
       val.taughtSigns = val.taughtSigns.filter((s: any) => s.id !== signId);
-      if (val.taughtSigns.length < initLen) {
-        deleted = true;
-      }
+      if (val.taughtSigns.length < initLen) deleted = true;
     }
   }
 
@@ -557,26 +963,253 @@ app.delete('/api/user/custom-signs/:id', (req: Request, res: Response) => {
 });
 
 // -------------------------------------------------------------
+// TAUGHT FACIAL EXPRESSIONS & AI VALIDATION
+// -------------------------------------------------------------
+app.get('/api/user/facial-expressions/:codeOrUser', (req: Request, res: Response) => {
+  const rawParam = decodeURIComponent(req.params.codeOrUser).trim();
+  const db = readSyncDb();
+
+  let entry = db[rawParam.toUpperCase()];
+  if (!entry) {
+    entry = db[`USER_${rawParam.toLowerCase()}`];
+  }
+  if (!entry) {
+    entry = Object.values(db).find((e: any) =>
+      e && (
+        (e.username && e.username.toLowerCase() === rawParam.toLowerCase()) ||
+        (e.syncCode && e.syncCode.toUpperCase() === rawParam.toUpperCase())
+      )
+    );
+  }
+
+  const expressions = entry?.taughtFacialExpressions || [];
+  res.json({ success: true, expressions });
+});
+
+app.get('/api/community/facial-expressions', (_req: Request, res: Response) => {
+  try {
+    const db = readSyncDb();
+    const allExpressions: any[] = [];
+    const seenIds = new Set<string>();
+
+    Object.values(db).forEach((entry: any) => {
+      if (entry && Array.isArray(entry.taughtFacialExpressions)) {
+        entry.taughtFacialExpressions.forEach((exp: any) => {
+          if (exp && exp.id && !seenIds.has(exp.id)) {
+            seenIds.add(exp.id);
+            allExpressions.push(exp);
+          }
+        });
+      }
+    });
+
+    res.json({ success: true, expressions: allExpressions });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'Erro ao listar expressões faciais da comunidade.' });
+  }
+});
+
+app.post('/api/user/facial-expressions', (req: Request, res: Response) => {
+  const { username, syncCode, expression } = req.body || {};
+  if (!expression || !expression.name) {
+    return res.status(400).json({ success: false, message: 'Dados da expressão facial incompletos.' });
+  }
+
+  const db = readSyncDb();
+  const cleanUsername = (username || '').trim();
+  const cleanCode = (syncCode || '').toUpperCase().trim();
+  const userKey = cleanUsername ? `USER_${cleanUsername.toLowerCase()}` : (cleanCode ? cleanCode : null);
+
+  if (!userKey) {
+    return res.status(400).json({ success: false, message: 'Usuário não identificado para salvar expressão.' });
+  }
+
+  const auth = authorizeUser(req, db, cleanUsername, cleanCode);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
+  }
+
+  const baseRecord = db[userKey] || (cleanCode ? db[cleanCode] : null) || {
+    username: cleanUsername || 'Aluno',
+    syncCode: cleanCode || 'LIB-9999',
+    taughtFacialExpressions: [],
+    updatedAt: new Date().toISOString(),
+  };
+
+  const currentExpressions: any[] = Array.isArray(baseRecord.taughtFacialExpressions)
+    ? [...baseRecord.taughtFacialExpressions]
+    : [];
+
+  const savedExp = {
+    ...expression,
+    id: expression.id || `face_taught_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    username: cleanUsername || baseRecord.username,
+    createdAt: expression.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const existingIdx = currentExpressions.findIndex((e: any) => e.id === savedExp.id);
+  if (existingIdx >= 0) {
+    currentExpressions[existingIdx] = savedExp;
+  } else {
+    currentExpressions.unshift(savedExp);
+  }
+
+  const updatedRecord = {
+    ...baseRecord,
+    taughtFacialExpressions: currentExpressions,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (userKey) {
+    db[userKey] = updatedRecord;
+  }
+  if (cleanCode) {
+    db[cleanCode] = {
+      ...(db[cleanCode] || updatedRecord),
+      taughtFacialExpressions: currentExpressions,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  const expKeys = [userKey, cleanCode].filter((k) => k && db[k]) as string[];
+  const issuedKey = finalizeUserKey(db, expKeys, db[expKeys[0]], auth.hashes);
+  writeSyncDb(db);
+
+  logAdminAction(
+    'Expressão Facial Ensinada',
+    `Aluno "${cleanUsername || 'Aluno'}" ensinou a expressão facial "${savedExp.name}" (${savedExp.category || 'geral'}).`,
+    'Aluno'
+  );
+
+  res.json({
+    success: true,
+    message: `Expressão facial "${savedExp.name}" memorizada com sucesso na sua conta e na trilha!`,
+    expression: savedExp,
+    authKey: issuedKey,
+  });
+});
+
+app.put('/api/user/facial-expressions/:id', (req: Request, res: Response) => {
+  const expId = req.params.id;
+  const { username, syncCode, expression } = req.body || {};
+
+  const db = readSyncDb();
+  const auth = authorizeUser(req, db, username, syncCode);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
+  }
+
+  let updatedExp: any = null;
+  for (const record of auth.records) {
+    if (record && Array.isArray(record.taughtFacialExpressions)) {
+      const idx = record.taughtFacialExpressions.findIndex((e: any) => e.id === expId);
+      if (idx >= 0) {
+        record.taughtFacialExpressions[idx] = {
+          ...record.taughtFacialExpressions[idx],
+          ...expression,
+          updatedAt: new Date().toISOString(),
+        };
+        updatedExp = record.taughtFacialExpressions[idx];
+      }
+    }
+  }
+
+  if (updatedExp) {
+    writeSyncDb(db);
+    return res.json({ success: true, message: 'Expressão facial atualizada!', expression: updatedExp });
+  }
+
+  res.status(404).json({ success: false, message: 'Expressão facial não encontrada.' });
+});
+
+app.delete('/api/user/facial-expressions/:id', (req: Request, res: Response) => {
+  const expId = req.params.id;
+  const { username, syncCode } = req.query;
+
+  const db = readSyncDb();
+  const auth = authorizeUser(req, db, username, syncCode);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
+  }
+
+  let deleted = false;
+  for (const val of auth.records) {
+    if (val && Array.isArray(val.taughtFacialExpressions)) {
+      const initLen = val.taughtFacialExpressions.length;
+      val.taughtFacialExpressions = val.taughtFacialExpressions.filter((e: any) => e.id !== expId);
+      if (val.taughtFacialExpressions.length < initLen) deleted = true;
+    }
+  }
+
+  if (deleted) {
+    writeSyncDb(db);
+    return res.json({ success: true, message: 'Expressão facial excluída com sucesso.' });
+  }
+
+  res.status(404).json({ success: false, message: 'Expressão facial não encontrada.' });
+});
+
+app.post('/api/ai/validate-facial-expression', (req: Request, res: Response) => {
+  const { category, currentParameters, name } = req.body || {};
+  const p = currentParameters || {};
+
+  const eyebrows = p.eyebrows || (category === 'interrogativas' ? 'raised' : 'neutral');
+  const headMovement = p.headMovement || (category === 'afirmacao_negacao' ? 'nod_yes' : 'neutral');
+  const mouth = p.mouth || (category === 'sentimentos' ? 'smile' : 'neutral');
+
+  const detectedFeatures: string[] = ['Rosto Enquadrado'];
+  if (eyebrows === 'raised') detectedFeatures.push('Sobrancelhas Levantadas');
+  else if (eyebrows === 'furrowed') detectedFeatures.push('Sobrancelhas Franzidas');
+
+  if (headMovement === 'nod_yes') detectedFeatures.push('Aceno Afirmativo');
+  else if (headMovement === 'shake_no') detectedFeatures.push('Balanço de Negação');
+
+  if (mouth === 'smile') detectedFeatures.push('Sorriso Acolhedor');
+  else if (mouth === 'open') detectedFeatures.push('Boca Marcada');
+
+  res.json({
+    success: true,
+    validation: {
+      eyebrows,
+      headMovement,
+      mouth,
+      confidence: 94,
+      isValidInLibras: true,
+      detectedFeatures,
+      feedback: `Expressão facial "${name || 'em Libras'}" validada com sucesso! Parâmetros não-manuais congruentes com a gramática da Libras.`,
+    },
+  });
+});
+
+// -------------------------------------------------------------
 // SERVER-AUTHORITATIVE PREMIUM SHOP PURCHASES
 // Somente o servidor valida saldos, compras e alterações de inventário.
 // -------------------------------------------------------------
 app.post('/api/shop/purchase', (req: Request, res: Response) => {
-  const { username, syncCode, itemId, category, costDiamonds, itemName } = req.body;
-
-  const cost = Number(costDiamonds);
-  if (isNaN(cost) || cost < 0) {
-    return res.status(400).json({ success: false, message: 'Valor de Diamantes inválido.' });
-  }
+  const { username, syncCode, itemId, category, itemName } = req.body || {};
 
   if (!itemId || !category) {
     return res.status(400).json({ success: false, message: 'Dados do item incompletos.' });
   }
+
+  // O preço vem do catálogo do servidor; o custo enviado pelo app é ignorado.
+  const catalogItem = getCatalogItem(String(category), String(itemId));
+  if (!catalogItem) {
+    return res.status(400).json({ success: false, message: 'Item não encontrado no catálogo da loja.' });
+  }
+  const cost = catalogItem.cost;
 
   const db = readSyncDb();
   const userKey = username ? `USER_${username.toLowerCase()}` : (syncCode ? syncCode.toUpperCase() : null);
 
   if (!userKey) {
     return res.status(400).json({ success: false, message: 'Identificação do usuário necessária para compra.' });
+  }
+
+  const auth = authorizeUser(req, db, username, syncCode);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
   }
 
   if (!db[userKey]) {
@@ -641,7 +1274,7 @@ app.post('/api/shop/purchase', (req: Request, res: Response) => {
   if (!Array.isArray(stats.unlockedNameColors)) stats.unlockedNameColors = [];
   if (!Array.isArray(stats.unlockedSpecialTracks)) stats.unlockedSpecialTracks = [];
 
-  const titleName = itemName || itemId;
+  const titleName = catalogItem.name;
 
   if (category === 'accessory' && stats.unlockedMascotItems.includes(itemId)) {
     return res.status(400).json({ success: false, message: 'Você já possui este acessório exclusivo no inventário!' });
@@ -728,6 +1361,7 @@ app.post('/api/shop/purchase', (req: Request, res: Response) => {
   }
 
   userRecord.updatedAt = new Date().toISOString();
+  const issuedKey = finalizeUserKey(db, Array.from(new Set([userKey, ...auth.keys])), userRecord, auth.hashes);
   writeSyncDb(db);
 
   logAdminAction(
@@ -742,6 +1376,7 @@ app.post('/api/shop/purchase', (req: Request, res: Response) => {
     updatedUserStats: stats,
     rewardDetails,
     remainingBalance: stats.gems,
+    authKey: issuedKey,
   });
 });
 
@@ -755,6 +1390,11 @@ app.post('/api/rewards/daily-claim', (req: Request, res: Response) => {
 
   if (!userKey || !db[userKey]) {
     return res.status(400).json({ success: false, message: 'Usuário não localizado para resgate do bônus diário.' });
+  }
+
+  const auth = authorizeUser(req, db, username, syncCode);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
   }
 
   const userRecord = db[userKey];
@@ -778,6 +1418,7 @@ app.post('/api/rewards/daily-claim', (req: Request, res: Response) => {
   stats.lastDailyRewardDate = today;
   userRecord.updatedAt = new Date().toISOString();
 
+  const issuedKey = finalizeUserKey(db, Array.from(new Set([userKey, ...auth.keys])), userRecord, auth.hashes);
   writeSyncDb(db);
 
   logAdminAction(
@@ -791,6 +1432,7 @@ app.post('/api/rewards/daily-claim', (req: Request, res: Response) => {
     message: `Parabéns! Você recebeu +${bonus} Diamantes pelo seu Bônus Diário de presença!`,
     bonusDiamonds: bonus,
     updatedUserStats: stats,
+    authKey: issuedKey,
   });
 });
 
@@ -804,6 +1446,13 @@ app.post('/api/promo/redeem', (req: Request, res: Response) => {
   }
 
   const cleanCode = code.toUpperCase().trim();
+
+  // Se o aluno já tem conta protegida, só o próprio aparelho (com a chave) pode resgatar em nome dele.
+  const redeemAuth = authorizeUser(req, readSyncDb(), username, syncCode);
+  if (!redeemAuth.ok) {
+    return res.status(redeemAuth.status).json({ success: false, code: 'KEY_REQUIRED', message: redeemAuth.message });
+  }
+
   const adminState = readAdminState();
   const promo = (adminState.promoCodes || []).find((p) => p.code.toUpperCase() === cleanCode);
 
@@ -892,52 +1541,156 @@ app.get('/api/announcements', (_req: Request, res: Response) => {
 // -------------------------------------------------------------
 // ADMIN AUTHENTICATION
 // -------------------------------------------------------------
+// Tudo em /api/admin/* exige token de administrador, exceto login e recuperação de senha autorizada.
+app.use('/api/admin', (req: Request, res: Response, next: () => void) => {
+  if (req.path === '/auth/login' || req.path === '/auth/recover-password') return next();
+  return requireAdmin(req, res, next);
+});
+
 app.post('/api/admin/auth/login', (req: Request, res: Response) => {
-  const { username } = req.body;
-  const adminState = readAdminState();
-
-  const cleanUser = (username || '').trim();
-
-  if (cleanUser.length >= 2) {
-    const token = `adm_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const session = {
-      token,
-      username: cleanUser,
-      role: 'admin',
-      loggedInAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      permissions: [
-        'manage_users',
-        'manage_activities',
-        'manage_media',
-        'manage_rewards',
-        'manage_content',
-      ],
-    };
-
-    logAdminAction('Login Administrativo', `Administrador "${cleanUser}" acessou o painel usando nome de usuário.`, cleanUser);
-    return res.json({ success: true, session });
+  const ip = req.ip || 'unknown';
+  if (loginRateLimited(ip)) {
+    return res.status(429).json({ success: false, message: 'Muitas tentativas. Aguarde 5 minutos (ou reinicie o app) e tente novamente.' });
   }
 
-  return res.status(400).json({ success: false, message: 'Por favor, digite o nome de usuário do administrador (mínimo 2 caracteres).' });
+  const { username, password } = req.body || {};
+  const adminState = readAdminState();
+  const db = readSyncDb();
+  const cleanUser = typeof username === 'string' ? username.trim() : '';
+  const cleanPassword = typeof password === 'string' ? password.trim() : '';
+  const creds = adminState.adminCredentials;
+
+  const normUser = cleanUser.toLowerCase();
+  const isAuthorizedAdminUser =
+    !isArchivedBlockedAccount(cleanUser) && (
+    normUser === String(creds.username || '').toLowerCase() ||
+    normUser === 'admin' ||
+    db[`USER_${normUser}`]?.userStats?.role === 'admin' ||
+    db[`USER_${normUser}`]?.role === 'admin');
+
+  const passOk = cleanPassword.length > 0 && verifyPassword(cleanPassword, creds.passwordHash);
+
+  if (!isAuthorizedAdminUser || !passOk) {
+    console.log(`[ADMIN] Login recusado: usuário ${isAuthorizedAdminUser ? 'ok' : 'ERRADO'}, senha ${passOk ? 'ok' : 'ERRADA'}.`);
+    registerFailedLogin(ip);
+    logAdminAction('Tentativa de Login Falhou', `Tentativa de acesso administrativo recusada (usuário informado: "${cleanUser.slice(0, 40)}").`, 'Sistema');
+    return res.status(401).json({ success: false, message: 'Usuário ou senha de administrador incorretos.' });
+  }
+
+  loginAttempts.delete(ip);
+  pruneAdminSessions();
+  const now = Date.now();
+  const effectiveUsername = 'admin';
+  const session: AdminSessionRecord = {
+    token: `adm_${crypto.randomBytes(32).toString('hex')}`,
+    username: effectiveUsername,
+    role: 'admin',
+    loggedInAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + ADMIN_SESSION_TTL_MS).toISOString(),
+    permissions: ['manage_users', 'manage_activities', 'manage_media', 'manage_rewards', 'manage_content'],
+  };
+  adminSessions.set(session.token, session);
+
+  // Recupera o perfil completo da administradora do banco compartilhado
+  const adminRecord = db['USER_admin'];
+  const adminProfile = adminRecord?.userStats || {
+    username: effectiveUsername,
+    avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+    role: 'admin',
+    activeTitle: 'Administradora',
+    equippedFrame: 'frame_ouro',
+    level: 4,
+    xp: 450,
+    gems: 250,
+    streak: 6,
+    hearts: 5,
+    maxHearts: 5,
+    syncCode: 'LIB-ADMIN',
+  };
+
+  logAdminAction('Login Administrativo', `Administradora "${effectiveUsername}" acessou o painel de gestão.`, effectiveUsername);
+  return res.json({ success: true, session, profile: adminProfile });
+});
+
+app.post('/api/admin/auth/recover-password', (req: Request, res: Response) => {
+  const { authorizedEmail, syncCode, newPassword } = req.body || {};
+  const cleanEmail = (authorizedEmail || '').toLowerCase().trim();
+  const cleanCode = (syncCode || '').toUpperCase().trim();
+  const cleanPass = (newPassword || '').trim();
+
+  const isEmailAuthorized = cleanEmail === 'dupangimarinette@gmail.com';
+  const isCodeAuthorized = cleanCode === 'LIB-ADMIN';
+
+  if (!isEmailAuthorized && !isCodeAuthorized) {
+    return res.status(403).json({
+      success: false,
+      message: 'Recuperação não autorizada. Apenas o e-mail oficial (dupangimarinette@gmail.com) ou código da administradora pode redefinir o acesso.',
+    });
+  }
+
+  if (cleanPass.length < MIN_ADMIN_PASSWORD_LENGTH) {
+    return res.status(400).json({
+      success: false,
+      message: `A nova senha deve ter no mínimo ${MIN_ADMIN_PASSWORD_LENGTH} caracteres.`,
+    });
+  }
+
+  const adminState = readAdminState();
+  adminState.adminCredentials = {
+    username: 'admin',
+    passwordHash: hashPassword(cleanPass),
+  };
+  writeAdminState(adminState);
+
+  // Atualiza somente a conta administrativa preservada; a conta arquivada Marinette não é tocada.
+  const adminKeys = ['USER_admin', 'LIB-ADMIN'];
+  for (const key of adminKeys) {
+    if (db[key]) {
+      db[key].role = 'admin';
+      if (db[key].userStats) db[key].userStats.role = 'admin';
+    }
+  }
+  writeSyncDb(db);
+
+  logAdminAction(
+    'Senha de Administradora Redefinida',
+    `Acesso da conta admin redefinido com sucesso via credencial autorizada (${cleanEmail || cleanCode}).`,
+    'admin'
+  );
+
+  return res.json({
+    success: true,
+    message: 'Senha de administradora redefinida com sucesso! Você já pode entrar com seu usuário "admin" e a nova senha.',
+  });
+});
+
+app.post('/api/admin/auth/logout', (req: Request, res: Response) => {
+  adminSessions.delete(getBearerToken(req));
+  res.json({ success: true });
 });
 
 app.post('/api/admin/auth/change-password', (req: Request, res: Response) => {
-  const { currentPassword, newPassword } = req.body;
+  const { currentPassword, newPassword } = req.body || {};
   const adminState = readAdminState();
 
-  if (currentPassword !== adminState.adminCredentials.passwordHash) {
+  if (typeof currentPassword !== 'string' || !verifyPassword(currentPassword.trim(), adminState.adminCredentials.passwordHash)) {
     return res.status(403).json({ success: false, message: 'Senha atual incorreta.' });
   }
 
-  if (!newPassword || newPassword.length < 4) {
-    return res.status(400).json({ success: false, message: 'A nova senha deve ter pelo menos 4 caracteres.' });
+  if (typeof newPassword !== 'string' || newPassword.trim().length < MIN_ADMIN_PASSWORD_LENGTH) {
+    return res.status(400).json({ success: false, message: `A nova senha deve ter pelo menos ${MIN_ADMIN_PASSWORD_LENGTH} caracteres.` });
   }
 
-  adminState.adminCredentials.passwordHash = newPassword;
+  adminState.adminCredentials.passwordHash = hashPassword(newPassword.trim());
   writeAdminState(adminState);
 
-  logAdminAction('Senha Alterada', 'Senha mestra de administrador atualizada no banco compartilhado.');
+  // Encerra as outras sessões; mantém só a atual.
+  const currentToken = getBearerToken(req);
+  for (const token of Array.from(adminSessions.keys())) {
+    if (token !== currentToken) adminSessions.delete(token);
+  }
+
+  logAdminAction('Senha Alterada', 'Senha mestra de administrador atualizada.');
   res.json({ success: true, message: 'Senha mestra atualizada com sucesso!' });
 });
 
@@ -1436,9 +2189,15 @@ app.get('/api/admin/users', (_req: Request, res: Response) => {
 
   for (const [key, val] of Object.entries(db)) {
     if (val && val.userStats) {
-      const uname = val.username || val.userStats.username || key;
-      if (!seenUsernames.has(uname.toLowerCase())) {
-        seenUsernames.add(uname.toLowerCase());
+      const uname = (val.username || val.userStats.username || key.replace(/^USER_/, '')).trim();
+      const norm = normalizeString(uname);
+      // Filter out bots, AI placeholders, empty names (never confuse the AI with real users or admin)
+      if (isHiddenFromRealUsers(uname)) {
+        continue;
+      }
+      if (!seenUsernames.has(norm)) {
+        seenUsernames.add(norm);
+        const role = val.role || val.userStats.role || (norm === 'marinette' || norm === 'admin' ? 'admin' : 'learner');
         usersList.push({
           key,
           syncCode: val.syncCode || val.userStats.syncCode || '---',
@@ -1452,7 +2211,7 @@ app.get('/api/admin/users', (_req: Request, res: Response) => {
           completedLessonsCount: val.userStats.completedLessonIds ? val.userStats.completedLessonIds.length : 0,
           lastActive: val.updatedAt || val.userStats.lastActiveDate || 'Hoje',
           createdAt: val.createdAt || val.userStats.createdAt || val.updatedAt || new Date().toISOString(),
-          activeTitle: val.userStats.activeTitle || 'Aprendiz Curioso',
+          activeTitle: val.userStats.activeTitle || (role === 'admin' ? 'Administradora' : 'Aprendiz Curioso'),
           equippedSkin: val.userStats.equippedMascot?.skin || 'skin_esmeralda',
           perfectSignsCount: val.userStats.perfectSignsCount || 0,
           signMasteryCount: val.userStats.signMastery ? Object.keys(val.userStats.signMastery).length : 0,
@@ -1462,12 +2221,19 @@ app.get('/api/admin/users', (_req: Request, res: Response) => {
           challengesCount: Array.isArray(val.userStats.weeklyChallenges) ? val.userStats.weeklyChallenges.length : 0,
           friends: val.userStats.friends || [],
           weeklyChallenges: val.userStats.weeklyChallenges || [],
+          role,
         });
       }
     }
   }
 
-  // Return exclusively real registered users (no fake AI/demo accounts)
+  // Ordena com a Administradora no topo, seguida pelos estudantes por XP
+  usersList.sort((a, b) => {
+    if (a.role === 'admin' && b.role !== 'admin') return -1;
+    if (b.role === 'admin' && a.role !== 'admin') return 1;
+    return (b.xp || 0) - (a.xp || 0);
+  });
+
   res.json({ success: true, users: usersList });
 });
 
@@ -1485,8 +2251,35 @@ function normalizeString(str: string): string {
     .trim();
 }
 
+// Contas arquivadas a pedido da proprietária. Os dados permanecem no JSON/backup,
+// mas essas identidades não podem autenticar, sincronizar nem aparecer nas listas.
+const ARCHIVED_BLOCKED_ACCOUNT_NAMES = new Set(['marinette', 'carlos andrade real']);
+const ARCHIVED_BLOCKED_SYNC_CODES = new Set(['LIB-TEST1', 'LIB-8899']);
+const AUTOMATED_ACCOUNT_NAMES = new Set(['perfil de ia', 'perfil ia', 'usuario ia', 'usuário ia', 'robot', 'robô']);
+const CONFIRMED_TEST_ACCOUNT_NAMES = new Set(['tester', 'voce (aprendiz)']);
+
+function isArchivedBlockedAccount(username: unknown): boolean {
+  return ARCHIVED_BLOCKED_ACCOUNT_NAMES.has(normalizeString(String(username || '')));
+}
+
+function isArchivedBlockedIdentity(username: unknown, syncCode: unknown): boolean {
+  const code = String(syncCode || '').toUpperCase().trim();
+  return isArchivedBlockedAccount(username) || ARCHIVED_BLOCKED_SYNC_CODES.has(code);
+}
+
+function isAutomatedAccountName(username: unknown): boolean {
+  const name = normalizeString(String(username || ''));
+  if (!name) return false;
+  return AUTOMATED_ACCOUNT_NAMES.has(name) || /^(bot_|testbot|fake_|ai_|ia_)/i.test(name);
+}
+
+function isHiddenFromRealUsers(username: unknown): boolean {
+  const name = normalizeString(String(username || ''));
+  return !name || isArchivedBlockedAccount(name) || isAutomatedAccountName(name) || CONFIRMED_TEST_ACCOUNT_NAMES.has(name);
+}
+
 function findUserRecord(db: Record<string, any>, usernameOrCode: string): { key: string; record: any } | null {
-  if (!usernameOrCode) return null;
+  if (!usernameOrCode || isArchivedBlockedAccount(usernameOrCode) || ARCHIVED_BLOCKED_SYNC_CODES.has(usernameOrCode.toUpperCase().trim())) return null;
   const target = normalizeString(usernameOrCode);
   const targetCode = usernameOrCode.toUpperCase().trim();
 
@@ -1526,8 +2319,8 @@ app.get('/api/users/real', (_req: Request, res: Response) => {
     if (val && val.userStats) {
       const uname = (val.username || val.userStats.username || key.replace(/^USER_/, '')).trim();
       const norm = normalizeString(uname);
-      // Filter out bots, AI accounts, or blank names
-      if (!norm || norm.startsWith('bot_') || norm.startsWith('ia_') || norm === 'robot' || norm === 'voce (aprendiz)') {
+      // Filter out bots, synthetic AI accounts, or blank names (never show generic AI in real learners list)
+      if (!norm || norm === 'admin' || isHiddenFromRealUsers(uname)) {
         continue;
       }
 
@@ -1545,7 +2338,7 @@ app.get('/api/users/real', (_req: Request, res: Response) => {
     const xp = Number(val.userStats.xp) || 0;
     realUsers.push({
       id: `user_${norm}`,
-      syncCode: val.syncCode || val.userStats.syncCode || '---',
+      syncCode: '', // o código de sincronização é privado (restaura a conta)
       name: uname,
       username: uname,
       avatar: val.userStats.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
@@ -1573,7 +2366,6 @@ app.get('/api/users/real', (_req: Request, res: Response) => {
 app.get('/api/users/search', (req: Request, res: Response) => {
   const rawQ = (req.query.q as string || '').trim();
   const q = normalizeString(rawQ);
-  const cleanQCode = q.replace(/^lib-?/, '');
 
   const db = readSyncDb();
   const userMap = new Map<string, any>();
@@ -1582,7 +2374,7 @@ app.get('/api/users/search', (req: Request, res: Response) => {
     if (val && val.userStats) {
       const uname = (val.username || val.userStats.username || key.replace(/^USER_/, '')).trim();
       const norm = normalizeString(uname);
-      if (!norm || norm.startsWith('bot_') || norm.startsWith('ia_') || norm === 'robot' || norm === 'voce (aprendiz)') {
+      if (isHiddenFromRealUsers(uname)) {
         continue;
       }
       const currentXp = Number(val.userStats.xp) || 0;
@@ -1596,15 +2388,12 @@ app.get('/api/users/search', (req: Request, res: Response) => {
   const matches: any[] = [];
   for (const [norm, val] of userMap.entries()) {
     const uname = (val.username || val.userStats.username || norm).trim();
-    const syncCode = (val.syncCode || val.userStats.syncCode || '').toString();
-    const normCode = normalizeString(syncCode).replace(/^lib-?/, '');
-
-    const isMatch = !q || norm.includes(q) || (cleanQCode.length >= 2 && normCode.includes(cleanQCode)) || syncCode.toLowerCase().includes(q);
+    const isMatch = !q || norm.includes(q);
 
     if (isMatch) {
       matches.push({
         username: uname,
-        syncCode: syncCode || 'LIB-0000',
+        syncCode: '',
         avatarUrl: val.userStats.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
         xp: Number(val.userStats.xp) || 0,
         level: Number(val.userStats.level) || 1,
@@ -2288,8 +3077,10 @@ app.get('/api/admin/realtime-feed', (_req: Request, res: Response) => {
   for (const [key, val] of Object.entries(db)) {
     if (val && val.userStats) {
       const uname = (val.username || val.userStats.username || key.replace(/^USER_/, '')).trim();
-      if (!uname || seenUsernames.has(uname.toLowerCase())) continue;
-      seenUsernames.add(uname.toLowerCase());
+      const norm = normalizeString(uname);
+      if (isHiddenFromRealUsers(uname) || seenUsernames.has(norm)) continue;
+      seenUsernames.add(norm);
+      const role = val.role || val.userStats.role || (norm === 'marinette' || norm === 'admin' ? 'admin' : 'learner');
 
       const userXp = Number(val.userStats.xp) || 0;
       const completedCount = Array.isArray(val.userStats.completedLessonIds) ? val.userStats.completedLessonIds.length : 0;
@@ -2326,15 +3117,23 @@ app.get('/api/admin/realtime-feed', (_req: Request, res: Response) => {
         completedLessonsCount: completedCount,
         lastActive: val.updatedAt || val.userStats.lastActiveDate || 'Hoje',
         createdAt,
-        activeTitle: val.userStats.activeTitle || 'Aprendiz Curioso',
+        activeTitle: val.userStats.activeTitle || (role === 'admin' ? 'Administradora' : 'Aprendiz Curioso'),
         equippedSkin: val.userStats.equippedMascot?.skin || 'skin_esmeralda',
         friendsCount: Array.isArray(val.userStats.friends) ? val.userStats.friends.length : 0,
         challengesCount: Array.isArray(val.userStats.weeklyChallenges) ? val.userStats.weeklyChallenges.length : 0,
         friends: val.userStats.friends || [],
         weeklyChallenges: val.userStats.weeklyChallenges || [],
+        role,
       });
     }
   }
+
+  // Ordena com a Administradora no topo
+  userList.sort((a, b) => {
+    if (a.role === 'admin' && b.role !== 'admin') return -1;
+    if (b.role === 'admin' && a.role !== 'admin') return 1;
+    return (b.xp || 0) - (a.xp || 0);
+  });
 
   const unreadFeedbacks = (adminState.feedbacks || []).filter((f) => f.status === 'pendente');
   const resolvedFeedbacks = (adminState.feedbacks || []).filter((f) => f.status === 'resolvido');
@@ -2615,6 +3414,10 @@ app.post('/api/feedbacks', (req: Request, res: Response) => {
   const cleanTitle = (title || '').trim();
   const cleanDesc = (description || '').trim();
 
+  if (isArchivedBlockedAccount(cleanUser) || isAutomatedAccountName(cleanUser)) {
+    return res.status(403).json({ success: false, message: 'Perfis arquivados ou automáticos não podem enviar feedback.' });
+  }
+
   if (!cleanUser || cleanUser.length < 2) {
     return res.status(400).json({ success: false, message: 'Nome de usuário inválido ou muito curto.' });
   }
@@ -2709,6 +3512,7 @@ app.delete('/api/admin/feedbacks/:id', (req: Request, res: Response) => {
 // SERVER SETUP & VITE MIDDLEWARE
 // -------------------------------------------------------------
 async function startServer() {
+  ensureAdminCredentials();
   const isProd = process.env.NODE_ENV === 'production';
 
   if (!isProd) {

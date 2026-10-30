@@ -91,6 +91,13 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
   const lastFrameProcessTimeRef = useRef(0);
   const struggleDurationRef = useRef(0);
   const hasAutoShownHelpRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const onSignCompletedRef = useRef(onSignCompleted);
+  const lastEvaluationRef = useRef<ARTrackingState | null>(null);
+
+  useEffect(() => {
+    onSignCompletedRef.current = onSignCompleted;
+  }, [onSignCompleted]);
 
   // Trigger celebration
   const triggerCelebration = useCallback((accuracy: number) => {
@@ -102,10 +109,10 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
       colors: ['#10b981', '#38bdf8', '#fbbf24', '#f43f5e'],
     });
 
-    if (onSignCompleted) {
-      onSignCompleted(activeSign.id, accuracy);
+    if (onSignCompletedRef.current) {
+      onSignCompletedRef.current(activeSign.id, accuracy);
     }
-  }, [activeSign.id, onSignCompleted]);
+  }, [activeSign.id]);
 
   // Switch sign helper
   const handleNextSign = () => {
@@ -141,12 +148,13 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
     triggerCelebration(96);
   };
 
-  // Start Camera Stream with multi-tier fallback
+  // Start Camera Stream with multi-tier fallback and unmount protection
   const startCamera = useCallback(async () => {
     try {
       setCameraError(null);
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+        cameraStreamRef.current = null;
       }
 
       let stream: MediaStream | null = null;
@@ -177,6 +185,11 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
         }
       }
 
+      if (!isMountedRef.current) {
+        if (stream) stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
       if (stream) {
         cameraStreamRef.current = stream;
         if (videoRef.current) {
@@ -192,6 +205,7 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
         }
       }
     } catch (err: unknown) {
+      if (!isMountedRef.current) return;
       console.warn('Câmera não permitida ou indisponível:', err);
       setCameraError(
         'Permissão de câmera necessária para reconhecimento ao vivo. Você pode conceder a permissão ou praticar com o simulador visual assistido!'
@@ -201,11 +215,21 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
     }
   }, [facingMode]);
 
-  // Stop Camera
+  // Stop Camera cleanly
   const stopCamera = useCallback(() => {
     if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
       cameraStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch {}
+      videoRef.current.srcObject = null;
     }
     setCameraActive(false);
   }, []);
@@ -323,6 +347,7 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
         triggerCelebration(evaluation.currentAccuracy);
       }
 
+      lastEvaluationRef.current = evaluation;
       setTrackingState(evaluation);
     } else {
       // No hand in view
@@ -334,7 +359,18 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
         sensitivity
       );
       holdProgressRef.current = evaluation.holdProgress;
-      setTrackingState(evaluation);
+
+      const prev = lastEvaluationRef.current;
+      // Only trigger re-render if detection state changed, accuracy changed, or feedback message changed
+      if (
+        !prev ||
+        prev.isHandDetected !== false ||
+        prev.feedbackMessage !== evaluation.feedbackMessage ||
+        Math.abs(prev.holdProgress - evaluation.holdProgress) > 2
+      ) {
+        lastEvaluationRef.current = evaluation;
+        setTrackingState(evaluation);
+      }
     }
   };
 
@@ -490,8 +526,10 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
 
   // Start camera on mount
   useEffect(() => {
+    isMountedRef.current = true;
     startCamera();
     return () => {
+      isMountedRef.current = false;
       stopCamera();
     };
   }, [startCamera, stopCamera]);

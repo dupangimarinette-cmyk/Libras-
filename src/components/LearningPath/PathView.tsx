@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Check, Lock, Star, Sparkles, Award, Gift, Flame, CheckCircle2, Smile, Eye, ChevronRight } from 'lucide-react';
 import { LEARNING_MODULES } from '../../data/lessonsData';
 import { Lesson, LearningModule, UserStats } from '../../types/libras';
@@ -12,6 +12,7 @@ interface PathViewProps {
   onSelectLesson: (lesson: Lesson) => void;
   onOpenARStudio: (signId?: string) => void;
   onOpenFacialPractice?: () => void;
+  onOpenTeachFacial?: () => void;
   onClaimModuleChest: (moduleId: string, rewards: { xp: number; gems: number; hearts: number }) => void;
 }
 
@@ -21,11 +22,22 @@ export const PathView: React.FC<PathViewProps> = ({
   onSelectLesson,
   onOpenARStudio,
   onOpenFacialPractice,
+  onOpenTeachFacial,
   onClaimModuleChest,
 }) => {
   const [selectedChestModule, setSelectedChestModule] = useState<LearningModule | null>(null);
 
-  const activeModules = (modules || LEARNING_MODULES).filter((m) => m.enabled !== false);
+  const activeModules = useMemo(() => {
+    return (modules || LEARNING_MODULES).filter((m) => m.enabled !== false);
+  }, [modules]);
+
+  const allLessons = useMemo(() => {
+    return activeModules.flatMap((mod) => mod.lessons);
+  }, [activeModules]);
+
+  const firstIncompleteIndex = useMemo(() => {
+    return allLessons.findIndex((l) => !userStats.completedLessonIds.includes(l.id));
+  }, [allLessons, userStats.completedLessonIds]);
 
   // Check whether a lesson is unlocked or completed
   const isLessonCompleted = (lessonId: string) => {
@@ -34,18 +46,23 @@ export const PathView: React.FC<PathViewProps> = ({
 
   const isLessonActive = (lessonId: string, _indexOverall: number) => {
     if (isLessonCompleted(lessonId)) return false;
-    // The first non-completed lesson is active
-    let allLessons: Lesson[] = [];
-    activeModules.forEach((mod) => allLessons.push(...mod.lessons));
-    const firstIncomplete = allLessons.find((l) => !userStats.completedLessonIds.includes(l.id));
-    return firstIncomplete?.id === lessonId;
+    if (allLessons[firstIncompleteIndex]?.id === lessonId) return true;
+    const lesson = allLessons.find((l) => l.id === lessonId);
+    if ((lesson?.moduleId === 'mod_facial' || lesson?.moduleId === 'mod_community') && !isLessonCompleted(lessonId)) {
+      const modLessons = allLessons.filter((l) => l.moduleId === lesson?.moduleId);
+      const firstInMod = modLessons.find((l) => !isLessonCompleted(l.id));
+      if (firstInMod?.id === lessonId) return true;
+    }
+    return false;
   };
 
   const isLessonLocked = (lessonId: string) => {
     if (isLessonCompleted(lessonId)) return false;
-    let allLessons: Lesson[] = [];
-    activeModules.forEach((mod) => allLessons.push(...mod.lessons));
-    const firstIncompleteIndex = allLessons.findIndex((l) => !userStats.completedLessonIds.includes(l.id));
+    const lesson = allLessons.find((l) => l.id === lessonId);
+    if (lesson?.moduleId === 'mod_facial' || lesson?.moduleId === 'mod_community') {
+      return false;
+    }
+    if (firstIncompleteIndex === -1) return false;
     const thisIndex = allLessons.findIndex((l) => l.id === lessonId);
     return thisIndex > firstIncompleteIndex;
   };
@@ -124,17 +141,33 @@ export const PathView: React.FC<PathViewProps> = ({
               </p>
             </div>
 
-            <button
-              onClick={() => {
-                audio.playClick();
-                onOpenFacialPractice();
-              }}
-              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/30 hover:scale-103 active:scale-97 transition-all cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap self-start sm:self-auto"
-            >
-              <Smile className="w-4 h-4 fill-slate-950" />
-              <span>Abrir Módulo Facial</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+              {onOpenTeachFacial && (
+                <button
+                  onClick={() => {
+                    audio.playClick();
+                    onOpenTeachFacial();
+                  }}
+                  className="px-4 py-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-black text-xs sm:text-sm shadow-xl shadow-indigo-600/30 hover:scale-103 active:scale-97 transition-all cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap"
+                  title="Ensinar novas expressões faciais à IA para praticar na trilha"
+                >
+                  <Sparkles className="w-4 h-4 text-cyan-300" />
+                  <span>Ensinar à IA</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  audio.playClick();
+                  onOpenFacialPractice();
+                }}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/30 hover:scale-103 active:scale-97 transition-all cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <Smile className="w-4 h-4 fill-slate-950" />
+                <span>Abrir Módulo Facial</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Camera,
   Sparkles,
@@ -14,16 +14,18 @@ import {
 import { ARCameraView } from './ARCameraView';
 import { FacialPracticeView } from './FacialPracticeView';
 import { AITeachSignView } from './AITeachSignView';
+import { AITeachFacialView } from './AITeachFacialView';
 import { UserStats, LibrasSign } from '../../types/libras';
 import { audio } from '../../services/audioService';
 
-export type PracticeTabMode = 'facial' | 'signs_ar' | 'teach_ai';
+export type PracticeTabMode = 'facial' | 'teach_facial' | 'signs_ar' | 'teach_ai';
 
 interface PracticeHubViewProps {
   userStats: UserStats;
   signs?: LibrasSign[];
   targetSignId?: string;
   defaultMode?: PracticeTabMode;
+  isLessonModalOpen?: boolean;
   onSignCompletedInAR?: (signId: string, accuracy: number) => void;
   onCompleteFacialExercise?: (xp: number, gems: number, exerciseId: string, mascotItemId?: string) => void;
   onAwardXp?: (xp: number, gems: number) => void;
@@ -35,12 +37,27 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
   signs,
   targetSignId = 'letra_a',
   defaultMode = 'facial',
+  isLessonModalOpen = false,
   onSignCompletedInAR,
   onCompleteFacialExercise,
   onAwardXp,
   onTaughtSignSaved,
 }) => {
   const [activeMode, setActiveMode] = useState<PracticeTabMode>(defaultMode);
+
+  const handleFacialComplete = useCallback((xp: number, gems: number, exId: string, mascotItemId?: string) => {
+    if (onCompleteFacialExercise) {
+      onCompleteFacialExercise(xp, gems, exId, mascotItemId);
+    }
+  }, [onCompleteFacialExercise]);
+
+  const handleOpenSignStudio = useCallback(() => {
+    setActiveMode('signs_ar');
+  }, []);
+
+  const handleOpenTeachFacial = useCallback(() => {
+    setActiveMode('teach_facial');
+  }, []);
 
   return (
     <div className="w-full flex-1 flex flex-col">
@@ -63,11 +80,30 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
             <Smile className="w-4 h-4 text-amber-300" />
             <span>Expressões Faciais & RA</span>
             <span className="text-[10px] uppercase font-black px-1.5 py-0.2 rounded-full bg-black/30 text-amber-300">
+              Prática
+            </span>
+          </button>
+
+          {/* Tab 2: Ensinar Expressões à IA (NOVA ABA) */}
+          <button
+            onClick={() => {
+              audio.playClick();
+              setActiveMode('teach_facial');
+            }}
+            className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeMode === 'teach_facial'
+                ? 'bg-gradient-to-r from-blue-500 via-indigo-600 to-purple-600 text-white shadow-lg shadow-blue-500/30 scale-102'
+                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-cyan-300" />
+            <span>Ensinar Expressões à IA</span>
+            <span className="text-[10px] uppercase font-black px-1.5 py-0.2 rounded-full bg-cyan-400 text-slate-950">
               Novo
             </span>
           </button>
 
-          {/* Tab 2: Estúdio AR de Sinais (Mãos) */}
+          {/* Tab 3: Estúdio AR de Sinais (Mãos) */}
           <button
             onClick={() => {
               audio.playClick();
@@ -83,7 +119,7 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
             <span>Estúdio AR de Sinais</span>
           </button>
 
-          {/* Tab 3: Ensinar Sinais à IA */}
+          {/* Tab 4: Ensinar Sinais à IA */}
           <button
             onClick={() => {
               audio.playClick();
@@ -107,13 +143,22 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
           <FacialPracticeView
             userStats={userStats}
             signs={signs}
-            onCompleteExercise={(xp, gems, exId, mascotItemId) => {
-              if (onCompleteFacialExercise) {
-                onCompleteFacialExercise(xp, gems, exId, mascotItemId);
-              }
+            isSuspended={isLessonModalOpen}
+            onCompleteExercise={handleFacialComplete}
+            onOpenSignStudio={handleOpenSignStudio}
+            onOpenTeachFacial={handleOpenTeachFacial}
+          />
+        )}
+
+        {activeMode === 'teach_facial' && (
+          <AITeachFacialView
+            userStats={userStats}
+            onAwardXp={onAwardXp}
+            onExpressionSaved={() => {
+              if (onTaughtSignSaved) onTaughtSignSaved();
             }}
-            onOpenSignStudio={(signId) => {
-              setActiveMode('signs_ar');
+            onPracticeInStudio={() => {
+              setActiveMode('facial');
             }}
           />
         )}

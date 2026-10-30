@@ -991,8 +991,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       showToast('A nova senha e a confirmação não coincidem.', 'error');
       return;
     }
-    if (newPass.length < 4) {
-      showToast('A senha deve ter pelo menos 4 caracteres.', 'error');
+    if (newPass.length < 8) {
+      showToast('A senha deve ter pelo menos 8 caracteres.', 'error');
       return;
     }
 
@@ -1058,11 +1058,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return pairs;
   }, [users]);
 
-  // Filtered lists
-  const filteredUsers = users.filter((u) =>
-    u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.syncCode.toLowerCase().includes(userSearch.toLowerCase())
-  );
+  // Filtered lists (ignora placeholders e fakes de IA para mostrar exclusivamente alunos e administradora)
+  const filteredUsers = users.filter((u) => {
+    const norm = u.username.toLowerCase();
+    if (['você (aprendiz)', 'marinette', 'carlos andrade real', 'perfil de ia', 'robot'].includes(norm) || norm.startsWith('ia_') || norm.startsWith('bot_') || norm.startsWith('fake_') || norm.startsWith('ai_')) return false;
+    return (
+      norm.includes(userSearch.toLowerCase()) ||
+      u.syncCode.toLowerCase().includes(userSearch.toLowerCase())
+    );
+  });
 
   const filteredSigns = signs.filter((s) => {
     const matchesCategory = signCategoryFilter === 'todos' || s.category === signCategoryFilter;

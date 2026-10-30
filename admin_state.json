@@ -1,7 +1,7 @@
 {
   "adminCredentials": {
     "username": "admin",
-    "passwordHash": "libras2026"
+    "passwordHash": "scrypt$f5b67280d2615e5942833c6516d21966$097644b164d1ede460319a2c264d64460298aee7fcb727732fe63e8172efc60b6eef82a7aeb25ebabcc445fbf01e89545d0f09eb8b682f8287ea1ca2622be544"
   },
   "mediaItems": [],
   "customModules": [],
@@ -76,6 +76,90 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "log_1793362537890_jpxmw",
+      "timestamp": "2026-10-30T12:15:37.890Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"Marinette\" acessou o painel de gestão.",
+      "adminName": "Marinette"
+    },
+    {
+      "id": "log_1793362534922_vnm5s",
+      "timestamp": "2026-10-30T12:15:34.922Z",
+      "action": "Senha de Administradora Redefinida",
+      "details": "Acesso da administradora Marinette redefinido com sucesso via credencial autorizada (LIB-TEST1).",
+      "adminName": "Marinette"
+    },
+    {
+      "id": "log_1793362529039_ni6hq",
+      "timestamp": "2026-10-30T12:15:29.040Z",
+      "action": "Tentativa de Login Falhou",
+      "details": "Tentativa de acesso administrativo recusada (usuário informado: \"Marinette\").",
+      "adminName": "Sistema"
+    },
+    {
+      "id": "log_1793362522300_niwzk",
+      "timestamp": "2026-10-30T12:15:22.300Z",
+      "action": "Conta Restaurada",
+      "details": "A conta \"Marinette\" foi restaurada em um novo dispositivo.",
+      "adminName": "Sistema"
+    },
+    {
+      "id": "log_1793295657545_5znqo",
+      "timestamp": "2026-10-29T17:40:57.545Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"admin\" acessou o painel de gestão.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_1793295657529_tllgq",
+      "timestamp": "2026-10-29T17:40:57.529Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"Marinette\" acessou o painel de gestão.",
+      "adminName": "Marinette"
+    },
+    {
+      "id": "log_1793185146483_udl2f",
+      "timestamp": "2026-10-28T10:59:06.483Z",
+      "action": "Novo Aluno Registrado",
+      "details": "Novo estudante cadastrado no sistema: \"Marinette\" com código LIB-TEST1",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1793120451236_szmf0",
+      "timestamp": "2026-10-27T17:00:51.237Z",
+      "action": "Expressão Removida",
+      "details": "Expressão facial \"Interrogativa Qu- (Quem? Onde? Por quê?)\" removida.",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1793120427745_h46xg",
+      "timestamp": "2026-10-27T17:00:27.745Z",
+      "action": "Expressão Facial Ensinada",
+      "details": "Aluno \"AlunoTeste\" ensinou a expressão facial \"Interrogativa Qu- (Quem/Onde)\" (interrogativas).",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1793015321121_pu9xa",
+      "timestamp": "2026-10-26T11:48:41.121Z",
+      "action": "Feedback Atualizado",
+      "details": "Feedback ID \"fb_1793015321110_88r5\" atualizado para status \"resolvido\".",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1793015321110_uquu1",
+      "timestamp": "2026-10-26T11:48:41.110Z",
+      "action": "Novo Feedback Recebido",
+      "details": "Feedback de Carlos Andrade Real [ERRO]: \"Câmera travou no sinal da letra B\"",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1793015321098_f0v81",
+      "timestamp": "2026-10-26T11:48:41.098Z",
+      "action": "Novo Aluno Registrado",
+      "details": "Novo estudante cadastrado no sistema: \"Carlos Andrade Real\" com código LIB-8899",
+      "adminName": "Administrador"
+    },
     {
       "id": "log_1792927978686_8uch0",
       "timestamp": "2026-10-25T11:32:58.686Z",
@@ -317,6 +401,19 @@
   ],
   "feedbacks": [
     {
+      "id": "fb_1793015321110_88r5",
+      "username": "Carlos Andrade Real",
+      "syncCode": "LIB-8899",
+      "type": "erro",
+      "title": "Câmera travou no sinal da letra B",
+      "description": "Ao abrir a lição 2 em celular Android, o reconhecimento visual demorou 10 segundos.",
+      "priority": "alta",
+      "status": "resolvido",
+      "createdAt": "2026-10-26T11:48:41.110Z",
+      "adminReply": "Obrigado pelo aviso! Otimizamos o pipeline de landmarks da câmera para Android e a detecção agora está instantânea.",
+      "repliedAt": "2026-10-26T11:48:41.121Z"
+    },
+    {
       "id": "fb_1792672798796_zjk0",
       "username": "Tester",
       "type": "sugestao",
@@ -329,6 +426,6 @@
       "repliedAt": "2026-10-22T12:40:06.283Z"
     }
   ],
-  "lastContentVersion": 1792927978686,
-  "lastUpdatedAt": "2026-10-25T11:32:58.686Z"
+  "lastContentVersion": 1793362537890,
+  "lastUpdatedAt": "2026-10-30T12:15:37.890Z"
 }

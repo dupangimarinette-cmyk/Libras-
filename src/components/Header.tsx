@@ -6,6 +6,7 @@ import { adminService } from '../services/adminService';
 import { shopService } from '../services/shopService';
 import { getProfileColorConfig } from '../data/themesData';
 import { PWAInstallBanner } from './common/PWAInstallBanner';
+import { ProfileAvatar } from './common/ProfileAvatar';
 
 interface HeaderProps {
   stats: UserStats;
@@ -288,18 +289,13 @@ export const Header: React.FC<HeaderProps> = ({
                   style={{ borderColor: `${profileTheme.colorHex}50` }}
                   title={`Perfil de ${stats.username}`}
                 >
-                  <div className="relative">
-                    <img
-                      src={stats.avatarUrl}
-                      alt={stats.username}
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-[10px] object-cover group-hover:scale-105 transition-transform"
-                      style={{ border: `2px solid ${profileTheme.colorHex}` }}
-                    />
-                    <span
-                      className="absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded-full ring-2 ring-slate-900 shadow-sm"
-                      style={{ backgroundColor: profileTheme.colorHex }}
-                    />
-                  </div>
+                  <ProfileAvatar
+                    avatarUrl={stats.avatarUrl}
+                    username={stats.username}
+                    frameId={stats.equippedFrame}
+                    size="sm"
+                    fallbackBorderColor={profileTheme.colorHex}
+                  />
                   <span className={`hidden sm:inline text-xs truncate max-w-[110px] ${shopService.getNameColorStyle(stats.nameColor)}`}>
                     {stats.username}
                   </span>

@@ -706,7 +706,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Pesquisar por nome ou código (ex: LIB-7379)..."
+                  placeholder="Pesquisar por nome do aluno..."
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>

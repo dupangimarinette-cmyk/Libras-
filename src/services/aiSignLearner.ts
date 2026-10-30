@@ -1,5 +1,6 @@
 import { TaughtSign, TaughtSignSample, FacialTrackingState } from '../types/libras';
 import { Landmark } from './handTracker';
+import { userFetch } from './userAuth';
 
 const STORAGE_TAUGHT_SIGNS = 'librasgo_user_taught_signs';
 
@@ -123,7 +124,7 @@ class AISignLearner {
 
     // Persist to shared database on cloud
     try {
-      const res = await fetch('/api/user/custom-signs', {
+      const res = await userFetch('/api/user/custom-signs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,7 +132,7 @@ class AISignLearner {
           syncCode,
           sign: signPayload,
         }),
-      });
+      }, { username, syncCode });
 
       if (res.ok) {
         const data = await res.json();
@@ -159,9 +160,9 @@ class AISignLearner {
       if (username) query.append('username', username);
       if (syncCode) query.append('syncCode', syncCode);
 
-      const res = await fetch(`/api/user/custom-signs/${encodeURIComponent(signId)}?${query.toString()}`, {
+      const res = await userFetch(`/api/user/custom-signs/${encodeURIComponent(signId)}?${query.toString()}`, {
         method: 'DELETE',
-      });
+      }, { username, syncCode });
       return res.ok;
     } catch {
       return true;

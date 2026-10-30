@@ -24,11 +24,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Administrador = uid cadastrado manualmente na coleção /admins (pelo Console do Firebase).
+    // Nunca deduzir admin a partir do e-mail: qualquer pessoa consegue criar um e-mail com "admin".
     function isAdmin() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (request.auth.token.email != null && request.auth.token.email_verified == true && request.auth.token.email.matches('.*admin.*'))
-      );
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     function isValidUserProfile(data) {

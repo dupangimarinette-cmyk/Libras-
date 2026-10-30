@@ -12,6 +12,7 @@ import {
 import { LEARNING_MODULES } from '../data/lessonsData';
 import { LIBRAS_SIGNS } from '../data/signsData';
 import { MYSTERY_CHESTS } from '../data/shopCatalogData';
+import { adminFetch } from './adminFetch';
 
 const STORAGE_SHARED_CONTENT = 'librasgo_shared_content_v2';
 const BROADCAST_CHANNEL_NAME = 'librasgo_sync_channel';
@@ -222,7 +223,7 @@ class ContentService {
     level: number;
   }): Promise<{ success: boolean; message: string; module?: LearningModule }> {
     try {
-      const res = await fetch('/api/admin/modules', {
+      const res = await adminFetch('/api/admin/modules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
@@ -244,7 +245,7 @@ class ContentService {
 
   async updateModule(moduleId: string, updates: Partial<LearningModule>): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/modules/${encodeURIComponent(moduleId)}`, {
+      const res = await adminFetch(`/api/admin/modules/${encodeURIComponent(moduleId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -262,7 +263,7 @@ class ContentService {
 
   async toggleModule(moduleId: string): Promise<{ success: boolean; enabled?: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/modules/${encodeURIComponent(moduleId)}/toggle`, {
+      const res = await adminFetch(`/api/admin/modules/${encodeURIComponent(moduleId)}/toggle`, {
         method: 'POST',
       });
       const data = await res.json();
@@ -278,7 +279,7 @@ class ContentService {
 
   async deleteModule(moduleId: string): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/modules/${encodeURIComponent(moduleId)}`, {
+      const res = await adminFetch(`/api/admin/modules/${encodeURIComponent(moduleId)}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -302,7 +303,7 @@ class ContentService {
     targetSignIds?: string[];
   }): Promise<{ success: boolean; message: string; lesson?: Lesson }> {
     try {
-      const res = await fetch(`/api/admin/modules/${encodeURIComponent(moduleId)}/lessons`, {
+      const res = await adminFetch(`/api/admin/modules/${encodeURIComponent(moduleId)}/lessons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(lesson),
@@ -320,7 +321,7 @@ class ContentService {
 
   async updateLesson(moduleId: string, lessonId: string, updates: Partial<Lesson>): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/modules/${encodeURIComponent(moduleId)}/lessons/${encodeURIComponent(lessonId)}`, {
+      const res = await adminFetch(`/api/admin/modules/${encodeURIComponent(moduleId)}/lessons/${encodeURIComponent(lessonId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -338,7 +339,7 @@ class ContentService {
 
   async deleteLesson(moduleId: string, lessonId: string): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/modules/${encodeURIComponent(moduleId)}/lessons/${encodeURIComponent(lessonId)}`, {
+      const res = await adminFetch(`/api/admin/modules/${encodeURIComponent(moduleId)}/lessons/${encodeURIComponent(lessonId)}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -370,7 +371,7 @@ class ContentService {
     tips?: string[];
   }): Promise<{ success: boolean; message: string; sign?: LibrasSign }> {
     try {
-      const res = await fetch('/api/admin/signs', {
+      const res = await adminFetch('/api/admin/signs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sign),
@@ -388,7 +389,7 @@ class ContentService {
 
   async updateSign(signId: string, updates: Partial<LibrasSign> & { cm?: string; pa?: string; m?: string; o?: string; ef?: string }): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/signs/${encodeURIComponent(signId)}`, {
+      const res = await adminFetch(`/api/admin/signs/${encodeURIComponent(signId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -406,7 +407,7 @@ class ContentService {
 
   async deleteSign(signId: string): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/signs/${encodeURIComponent(signId)}`, {
+      const res = await adminFetch(`/api/admin/signs/${encodeURIComponent(signId)}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -423,7 +424,7 @@ class ContentService {
   // Chests / Rewards
   async updateChestConfigs(chestOverrides: Record<string, Partial<MysteryChest>>): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch('/api/admin/chests', {
+      const res = await adminFetch('/api/admin/chests', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chestOverrides }),
@@ -449,7 +450,7 @@ class ContentService {
     signId?: string;
   }): Promise<{ success: boolean; message: string; media?: MediaItem }> {
     try {
-      const res = await fetch('/api/admin/media', {
+      const res = await adminFetch('/api/admin/media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(media),
@@ -467,7 +468,7 @@ class ContentService {
 
   async deleteMedia(id: string): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/media/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/media/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -493,7 +494,7 @@ class ContentService {
     description: string;
   }): Promise<{ success: boolean; message: string; promoCode?: any }> {
     try {
-      const res = await fetch('/api/admin/promo-codes', {
+      const res = await adminFetch('/api/admin/promo-codes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(promo),
@@ -511,7 +512,7 @@ class ContentService {
 
   async updatePromoCode(id: string, updates: Partial<PromoCode>): Promise<{ success: boolean; message: string; promoCode?: any }> {
     try {
-      const res = await fetch(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -529,7 +530,7 @@ class ContentService {
 
   async deletePromoCode(id: string): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -553,7 +554,7 @@ class ContentService {
     ctaTab?: string;
   }): Promise<{ success: boolean; message: string; announcement?: SystemAnnouncement }> {
     try {
-      const res = await fetch('/api/admin/announcements', {
+      const res = await adminFetch('/api/admin/announcements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ann),
@@ -571,7 +572,7 @@ class ContentService {
 
   async deleteAnnouncement(id: string): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await fetch(`/api/admin/announcements/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/announcements/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
       const data = await res.json();

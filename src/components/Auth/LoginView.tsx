@@ -28,7 +28,7 @@ interface LoginViewProps {
   currentUsername: string;
   currentAvatar: string;
   onLogin: (username: string, avatarUrl: string, role?: UserRole) => void;
-  onAdminLoginSuccess?: (session: AdminSession) => void;
+  onAdminLoginSuccess?: (session: AdminSession, profile?: any) => void;
   onCancel?: () => void;
 }
 
@@ -83,10 +83,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [learnerError, setLearnerError] = useState('');
   const [savedProfiles] = useState<QuickProfile[]>(() => storageService.getSavedProfiles());
 
-  // Admin form state (username only - no password or email)
+  // Admin form state (preserved administrator account)
   const [adminUser, setAdminUser] = useState('admin');
+  const [adminPassword, setAdminPassword] = useState('');
   const [adminError, setAdminError] = useState('');
   const [adminLoading, setAdminLoading] = useState(false);
+
+  // Recovery Modal State
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('dupangimarinette@gmail.com');
+  const [recoveryCode, setRecoveryCode] = useState('LIB-ADMIN');
+  const [recoveryNewPass, setRecoveryNewPass] = useState('');
+  const [recoveryConfirmPass, setRecoveryConfirmPass] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryFeedback, setRecoveryFeedback] = useState<{ text: string; success: boolean } | null>(null);
 
   // Promo code state
   const [promoCodeInput, setPromoCodeInput] = useState('');
@@ -111,19 +121,45 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return;
     }
 
+    const normalizedName = trimmed.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (['marinette', 'carlos andrade real'].includes(normalizedName)) {
+      setLearnerError('Esta conta está arquivada e não pode entrar no LibrasGo.');
+      audio.playError();
+      return;
+    }
+    if (/^(bot_|testbot|fake_|ai_|ia_)/.test(normalizedName) || ['robot', 'perfil de ia'].includes(normalizedName)) {
+      setLearnerError('Perfis automáticos ou de IA não podem criar contas de aluno.');
+      audio.playError();
+      return;
+    }
+    if (normalizedName === 'admin') {
+      audio.playClick();
+      setProfileType('admin');
+      setAdminUser('admin');
+      setAdminError('Entre com a senha da conta administradora.');
+      return;
+    }
+
     audio.playSuccess();
-    storageService.saveProfile(trimmed, selectedAvatar);
+    storageService.saveProfile(trimmed, selectedAvatar, 'learner');
     onLogin(trimmed, selectedAvatar, 'learner');
   };
 
   const handleQuickLogin = (profile: QuickProfile) => {
+    audio.playClick();
+    if (profile.role === 'admin' || profile.username.toLowerCase() === 'admin') {
+      setProfileType('admin');
+      setAdminUser(profile.username);
+      setAdminError('Perfil de administradora selecionado. Digite sua senha de gestora para continuar.');
+      return;
+    }
     audio.playSuccess();
-    storageService.saveProfile(profile.username, profile.avatarUrl);
+    storageService.saveProfile(profile.username, profile.avatarUrl, 'learner');
     onLogin(profile.username, profile.avatarUrl, 'learner');
   };
 
   // ----------------------------------------------------------------------
-  // SUBMIT ADMIN LOGIN (Username only - sem senha ou e-mail)
+  // SUBMIT ADMIN LOGIN (usuário + senha, validados no servidor)
   // ----------------------------------------------------------------------
   const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,28 +177,77 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return;
     }
 
+    if (!adminPassword) {
+      setAdminError('Digite a senha do administrador.');
+      audio.playError();
+      return;
+    }
+
     setAdminLoading(true);
     setAdminError('');
 
     try {
-      const res = await adminService.loginAdmin(cleanUser);
+      const res = await adminService.loginAdmin(cleanUser, adminPassword);
       setAdminLoading(false);
 
       if (res.success && res.session) {
         audio.playSuccess();
+        storageService.saveProfile(cleanUser, res.profile?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', 'admin');
         if (onAdminLoginSuccess) {
-          onAdminLoginSuccess(res.session);
+          onAdminLoginSuccess(res.session, res.profile);
         } else {
-          onLogin(res.session.username, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'admin');
+          onLogin(res.session.username, res.profile?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'admin');
         }
       } else {
         audio.playError();
-        setAdminError(res.message || 'Não foi possível autenticar como administrador.');
+        setAdminError(res.message || 'Senha incorreta para este usuário de administrador.');
       }
     } catch {
       setAdminLoading(false);
       audio.playError();
-      setAdminError('Erro ao autenticar. Tente novamente.');
+      setAdminError('Erro ao autenticar. Verifique sua conexão e tente novamente.');
+    }
+  };
+
+  // ----------------------------------------------------------------------
+  // RECUPERAÇÃO SEGURA DE SENHA DA ADMINISTRADORA
+  // ----------------------------------------------------------------------
+  const handleRecoverPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryFeedback(null);
+
+    if (recoveryNewPass.length < 8) {
+      setRecoveryFeedback({ text: 'A nova senha deve ter no mínimo 8 caracteres.', success: false });
+      audio.playError();
+      return;
+    }
+
+    if (recoveryNewPass !== recoveryConfirmPass) {
+      setRecoveryFeedback({ text: 'As senhas digitadas não coincidem.', success: false });
+      audio.playError();
+      return;
+    }
+
+    setRecoveryLoading(true);
+    const res = await adminService.recoverAdminPassword({
+      authorizedEmail: recoveryEmail.trim(),
+      syncCode: recoveryCode.trim(),
+      newPassword: recoveryNewPass.trim(),
+    });
+    setRecoveryLoading(false);
+
+    if (res.success) {
+      audio.playVictory();
+      setRecoveryFeedback({ text: res.message, success: true });
+      setAdminPassword(recoveryNewPass.trim());
+      setAdminUser('admin');
+      setTimeout(() => {
+        setShowRecoveryModal(false);
+        setRecoveryFeedback(null);
+      }, 2000);
+    } else {
+      audio.playError();
+      setRecoveryFeedback({ text: res.message, success: false });
     }
   };
 
@@ -447,7 +532,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
             <form onSubmit={handleAdminSubmit} className="space-y-4">
               
-              {/* Admin Username Input - No password or email */}
+              {/* Admin Username Input */}
               <div>
                 <label className="block text-xs uppercase font-extrabold text-slate-300 tracking-wider mb-2">
                   Nome de Usuário de Administrador:
@@ -475,25 +560,22 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 )}
               </div>
 
-              {/* No Password Info Box */}
-              <div className="p-3.5 rounded-2xl bg-slate-950 border border-indigo-500/30 flex items-center justify-between gap-3 text-xs">
-                <div>
-                  <span className="font-black text-indigo-300 block">✨ Login Rápido e Direto:</span>
-                  <span className="text-[11px] text-slate-400">
-                    Acesso exclusivo por usuário (<strong className="text-white">admin</strong> ou seu nome). Sem senhas ou e-mails necessários.
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    audio.playClick();
-                    setAdminUser('admin');
-                    setAdminError('');
+              {/* Admin Password */}
+              <div>
+                <label className="block text-xs uppercase font-extrabold text-slate-300 tracking-wider mb-2">
+                  Senha de Administrador:
+                </label>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={adminPassword}
+                  onChange={(e) => {
+                    setAdminPassword(e.target.value);
+                    if (adminError) setAdminError('');
                   }}
-                  className="px-2.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white border border-indigo-500/40 text-[11px] font-black transition-all cursor-pointer whitespace-nowrap"
-                >
-                  Usar "admin"
-                </button>
+                  placeholder="Digite a senha"
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-950 border border-slate-700 text-white font-bold text-sm placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                />
               </div>
 
               {/* Submit Button */}
@@ -511,6 +593,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </>
                 )}
               </button>
+
+              {/* Forgot / Recover Admin Password Trigger */}
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    audio.playClick();
+                    setShowRecoveryModal(true);
+                  }}
+                  className="text-xs text-indigo-300 hover:text-white underline cursor-pointer font-bold inline-flex items-center gap-1.5 transition-colors"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Esqueci a Senha / Recuperar Acesso de Administradora</span>
+                </button>
+              </div>
             </form>
 
             {/* Security Guarantee */}
@@ -520,6 +617,124 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
 
           </div>
+
+          {/* Secure Admin Password Recovery Modal */}
+          {showRecoveryModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-md bg-slate-900 border-2 border-indigo-500/50 rounded-3xl p-6 shadow-2xl text-white relative space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
+                      <Shield className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-white">Recuperar Senha de Administradora</h3>
+                      <p className="text-[11px] text-slate-400">Apenas a administradora autorizada pode redefinir o acesso.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      audio.playClick();
+                      setShowRecoveryModal(false);
+                      setRecoveryFeedback(null);
+                    }}
+                    className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleRecoverPasswordSubmit} className="space-y-3.5">
+                  <div>
+                    <label className="block text-[11px] uppercase font-extrabold text-slate-300 tracking-wider mb-1">
+                      E-mail Autorizado da Administradora:
+                    </label>
+                    <input
+                      type="email"
+                      value={recoveryEmail}
+                      onChange={(e) => setRecoveryEmail(e.target.value)}
+                      placeholder="dupangimarinette@gmail.com"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-bold text-xs focus:border-indigo-400 focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] uppercase font-extrabold text-slate-300 tracking-wider mb-1">
+                      Código de Sincronização da Administradora:
+                    </label>
+                    <input
+                      type="text"
+                      value={recoveryCode}
+                      onChange={(e) => setRecoveryCode(e.target.value)}
+                      placeholder="LIB-ADMIN"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-bold text-xs uppercase font-mono focus:border-indigo-400 focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] uppercase font-extrabold text-slate-300 tracking-wider mb-1">
+                      Nova Senha (mínimo 8 caracteres):
+                    </label>
+                    <input
+                      type="password"
+                      value={recoveryNewPass}
+                      onChange={(e) => setRecoveryNewPass(e.target.value)}
+                      placeholder="Digite a nova senha segura"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-bold text-xs focus:border-indigo-400 focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] uppercase font-extrabold text-slate-300 tracking-wider mb-1">
+                      Confirmar Nova Senha:
+                    </label>
+                    <input
+                      type="password"
+                      value={recoveryConfirmPass}
+                      onChange={(e) => setRecoveryConfirmPass(e.target.value)}
+                      placeholder="Confirme a nova senha"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-bold text-xs focus:border-indigo-400 focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  {recoveryFeedback && (
+                    <div
+                      className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                        recoveryFeedback.success
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      }`}
+                    >
+                      {recoveryFeedback.success ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                      <span>{recoveryFeedback.text}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowRecoveryModal(false)}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={recoveryLoading}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-black text-xs shadow-lg shadow-indigo-600/30 cursor-pointer disabled:opacity-50"
+                    >
+                      {recoveryLoading ? 'Gravando Nova Senha...' : 'Salvar Nova Senha'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
         </div>
       )}

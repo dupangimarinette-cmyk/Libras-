@@ -16,17 +16,19 @@ import { AdminDashboard, AdminTab } from './components/Admin/AdminDashboard';
 import { RedeemView } from './components/Redeem/RedeemView';
 import { FeedbackView } from './components/Feedback/FeedbackView';
 
-import { UserStats, Lesson, DailyMission, LeaderboardEntry, MysteryChest, MascotItem, AdminSession, UserRole, SyncStatus, LibrasSign, TaughtSign, FriendUser, WeeklyChallenge } from './types/libras';
+import { UserStats, Lesson, LearningModule, DailyMission, LeaderboardEntry, MysteryChest, MascotItem, AdminSession, UserRole, SyncStatus, LibrasSign, TaughtSign, TaughtFacialExpression, FriendUser, WeeklyChallenge } from './types/libras';
 import { storageService } from './services/storageService';
 import { adminService } from './services/adminService';
 import { contentService } from './services/contentService';
 import { aiSignLearner } from './services/aiSignLearner';
-import { convertTaughtSignToLibrasSign, buildCommunityLearningModule } from './utils/signAdapters';
+import { learnedExpressionsService } from './services/learnedExpressionsService';
+import { convertTaughtSignToLibrasSign, buildCommunityLearningModule, buildFacialLearningModule, getAllFacialSigns } from './utils/signAdapters';
 import { audio } from './services/audioService';
 import { ACHIEVEMENTS } from './data/missionsData';
 import { MASCOT_ITEMS } from './data/shopCatalogData';
 import { ChestRewardResult } from './components/Shop/ChestOpeningModal';
 import { getThemeConfig, applyThemeToDocument, applyProfileColorToDocument, getThemeBackgroundStyle } from './data/themesData';
+import { generateSyncCode } from './utils/syncCode';
 
 export default function App() {
   const [userStats, setUserStats] = useState<UserStats>(() => storageService.getUserStats());
@@ -83,6 +85,9 @@ export default function App() {
   const [sharedContent, setSharedContent] = useState(() => contentService.getContent());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => contentService.getSyncStatus());
   const [communitySigns, setCommunitySigns] = useState<TaughtSign[]>(() => aiSignLearner.getCachedSigns());
+  const [communityFacialExpressions, setCommunityFacialExpressions] = useState<TaughtFacialExpression[]>(() =>
+    learnedExpressionsService.getCachedExpressions()
+  );
 
   // Real-time Auto-sync: polls every 2 seconds for admin changes without reload/download
   useEffect(() => {
@@ -96,6 +101,13 @@ export default function App() {
     aiSignLearner.fetchCommunitySigns().then((signs) => {
       if (signs && signs.length > 0) {
         setCommunitySigns(signs);
+      }
+    });
+
+    // Load community taught facial expressions across the entire app
+    learnedExpressionsService.fetchCommunityExpressions().then((exps) => {
+      if (exps && exps.length > 0) {
+        setCommunityFacialExpressions(exps);
       }
     });
 
@@ -605,22 +617,28 @@ export default function App() {
   const handleLogin = async (username: string, avatarUrl: string, role: UserRole = 'learner') => {
     const cleanUsername = username.trim();
     if (!cleanUsername) return;
+    const normalizedUsername = cleanUsername.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (['marinette', 'carlos andrade real'].includes(normalizedUsername) || /^(bot_|testbot|fake_|ai_|ia_)/.test(normalizedUsername)) return;
 
     // Check if an existing profile exists in the cloud database for this user
     const restored = await storageService.restoreFromCloud(cleanUsername);
 
     if (restored.success && restored.data) {
       // Existing user found: restore their exact progress
-      const userProfile = {
+      // Non-admin logins must never be granted admin role without active admin credentials (Rule 8)
+      const isAuthorizedAdmin = (role === 'admin' || cleanUsername.toLowerCase() === 'admin') && Boolean(adminSession);
+      const effectiveRole: UserRole = isAuthorizedAdmin ? 'admin' : 'learner';
+      const userProfile: UserStats = {
         ...restored.data.userStats,
         username: cleanUsername,
         avatarUrl: avatarUrl || restored.data.userStats.avatarUrl,
         isLoggedIn: true,
-        role,
+        role: effectiveRole,
       };
       setUserStats(userProfile);
       setMissions(restored.data.missions);
       storageService.saveUserStats(userProfile);
+      storageService.saveProfile(cleanUsername, userProfile.avatarUrl, effectiveRole);
       const updatedBoard = storageService.updateUserProfileInLeaderboard(cleanUsername, userProfile.avatarUrl);
       setLeaderboard(updatedBoard);
     } else {
@@ -630,7 +648,7 @@ export default function App() {
         avatarUrl: avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
         bio: 'Aprendendo a Língua Brasileira de Sinais com Realidade Aumentada! 🤟',
         isLoggedIn: true,
-        role,
+        role: 'learner',
         xp: 0,
         level: 1,
         streak: 0,
@@ -647,7 +665,7 @@ export default function App() {
         profileColor: '#10b981',
         soundEnabled: true,
         hapticEnabled: true,
-        syncCode: 'LIB-' + Math.floor(1000 + Math.random() * 9000),
+        syncCode: generateSyncCode(),
         lastCloudSynced: new Date().toISOString(),
         activeTitle: 'Aprendiz Curioso',
         unlockedTitles: ['Aprendiz Curioso'],
@@ -665,6 +683,7 @@ export default function App() {
 
       setUserStats(newAccountStats);
       storageService.saveUserStats(newAccountStats);
+      storageService.saveProfile(cleanUsername, newAccountStats.avatarUrl, 'learner');
       await storageService.syncWithCloud(newAccountStats, missions);
       const updatedBoard = storageService.updateUserProfileInLeaderboard(cleanUsername, newAccountStats.avatarUrl);
       setLeaderboard(updatedBoard);
@@ -677,13 +696,43 @@ export default function App() {
     }
   };
 
-  // Dedicated admin login handler
-  const handleAdminLoginSuccess = (session: AdminSession) => {
+  // Dedicated admin login handler: loads the full administrator profile
+  const handleAdminLoginSuccess = async (session: AdminSession, profile?: any) => {
     setAdminSession(session);
-    updateUserStats((prev) => ({
-      ...prev,
-      role: 'admin',
-    }));
+    let targetProfile = profile;
+    if (!targetProfile) {
+      const restored = await storageService.restoreFromCloud(session.username);
+      if (restored.success && restored.data) {
+        targetProfile = restored.data.userStats;
+      }
+    }
+    if (!targetProfile) {
+      const restored = await storageService.restoreFromCloud('admin');
+      if (restored.success && restored.data) {
+        targetProfile = restored.data.userStats;
+      }
+    }
+
+    if (targetProfile) {
+      const adminProfile: UserStats = {
+        ...targetProfile,
+        username: targetProfile.username || session.username || 'admin',
+        role: 'admin',
+        isLoggedIn: true,
+      };
+      setUserStats(adminProfile);
+      storageService.saveUserStats(adminProfile);
+      storageService.saveProfile(adminProfile.username, adminProfile.avatarUrl, 'admin');
+      const updatedBoard = storageService.updateUserProfileInLeaderboard(adminProfile.username, adminProfile.avatarUrl);
+      setLeaderboard(updatedBoard);
+    } else {
+      updateUserStats((prev) => ({
+        ...prev,
+        username: session.username || 'admin',
+        role: 'admin',
+        isLoggedIn: true,
+      }));
+    }
     setActiveTab('admin');
   };
 
@@ -868,32 +917,59 @@ export default function App() {
     (m) => m.currentProgress >= m.targetProgress && !m.isClaimed
   ).length;
 
-  // Combine official signs with converted community signs for full integration
+  // Combine official signs with converted community signs and facial signs for full integration
   const convertedCommunitySigns = React.useMemo(() => {
     return communitySigns.map(convertTaughtSignToLibrasSign);
   }, [communitySigns]);
+
+  const allFacialSigns = React.useMemo(() => {
+    return getAllFacialSigns(communityFacialExpressions);
+  }, [communityFacialExpressions]);
 
   const allAvailableSigns = React.useMemo(() => {
     const map = new Map<string, LibrasSign>();
     sharedContent.signs.forEach((s) => map.set(s.id, s));
     convertedCommunitySigns.forEach((s) => map.set(s.id, s));
+    allFacialSigns.forEach((s) => map.set(s.id, s));
     return Array.from(map.values());
-  }, [sharedContent.signs, convertedCommunitySigns]);
+  }, [sharedContent.signs, convertedCommunitySigns, allFacialSigns]);
 
-  // Combine official modules with dynamic community learning module
+  // Combine official modules with dynamic community learning module and facial expressions module
   const allModules = React.useMemo(() => {
     const communityModule = buildCommunityLearningModule(communitySigns);
-    if (communityModule) {
-      return [...sharedContent.modules, communityModule];
+    const facialModule = buildFacialLearningModule(communityFacialExpressions);
+
+    const baseModules = sharedContent.modules;
+    const hasFacial = baseModules.some((m) => m.id === 'mod_facial');
+    let modulesList: LearningModule[];
+
+    if (hasFacial) {
+      modulesList = baseModules.map((m) => (m.id === 'mod_facial' ? facialModule : m));
+    } else {
+      const insertIdx = baseModules.findIndex((m) => m.level === 3 || m.id === 'mod_3');
+      if (insertIdx !== -1) {
+        modulesList = [
+          ...baseModules.slice(0, insertIdx),
+          facialModule,
+          ...baseModules.slice(insertIdx),
+        ];
+      } else {
+        modulesList = [facialModule, ...baseModules];
+      }
     }
-    return sharedContent.modules;
-  }, [sharedContent.modules, communitySigns]);
+
+    if (communityModule) {
+      modulesList.push(communityModule);
+    }
+
+    return modulesList;
+  }, [sharedContent.modules, communitySigns, communityFacialExpressions]);
 
   // Keep activeLesson synced with refreshed module definitions without resetting or closing
   useEffect(() => {
     if (activeLesson) {
       for (const mod of allModules) {
-        const matching = mod.lessons.find((l) => l.id === activeLesson.id);
+        const matching = mod.lessons.find((l: Lesson) => l.id === activeLesson.id);
         if (matching && JSON.stringify(matching) !== JSON.stringify(activeLesson)) {
           setActiveLesson(matching);
           break;
@@ -960,6 +1036,10 @@ export default function App() {
               setPreferredPracticeMode('facial');
               setActiveTab('ar_lab');
             }}
+            onOpenTeachFacial={() => {
+              setPreferredPracticeMode('teach_facial');
+              setActiveTab('ar_lab');
+            }}
             onClaimModuleChest={handleClaimModuleChest}
           />
         )}
@@ -971,7 +1051,14 @@ export default function App() {
             targetSignId={targetARSignId}
             defaultMode={preferredPracticeMode}
             onSignCompletedInAR={handleSignCompletedInAR}
-            onCompleteFacialExercise={handleCompleteFacialExercise}
+            onCompleteFacialExercise={(xp, gems, exId, mascotItemId) => {
+              handleCompleteFacialExercise(xp, gems, exId, mascotItemId);
+              learnedExpressionsService.fetchCommunityExpressions().then((exps) => {
+                if (exps && exps.length > 0) {
+                  setCommunityFacialExpressions(exps);
+                }
+              });
+            }}
             onAwardXp={(xp, gems) => {
               updateUserStats((prev) => {
                 const newXp = prev.xp + xp;
@@ -984,6 +1071,11 @@ export default function App() {
               aiSignLearner.fetchCommunitySigns().then((signs) => {
                 if (signs && signs.length > 0) {
                   setCommunitySigns(signs);
+                }
+              });
+              learnedExpressionsService.fetchCommunityExpressions().then((exps) => {
+                if (exps && exps.length > 0) {
+                  setCommunityFacialExpressions(exps);
                 }
               });
             }}
@@ -1147,6 +1239,7 @@ export default function App() {
         <LessonModal
           lesson={activeLesson}
           userHearts={userStats.hearts}
+          signs={allAvailableSigns}
           onComplete={handleLessonCompleted}
           onHeartLost={handleHeartLost}
           onRefillHearts={handleRefillHearts}

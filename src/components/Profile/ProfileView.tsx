@@ -25,6 +25,8 @@ import {
   Shirt,
   Bot,
   Crown,
+  Lock,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { UserStats, Achievement, LibrasSign } from '../../types/libras';
 import { LIBRAS_SIGNS, SIGNS_BY_ID } from '../../data/signsData';
@@ -37,6 +39,8 @@ import { audio } from '../../services/audioService';
 import { storageService } from '../../services/storageService';
 import { shopService } from '../../services/shopService';
 import { APP_THEMES, COLOR_PALETTE, getThemeConfig, getProfileColorConfig } from '../../data/themesData';
+import { PROFILE_FRAMES, isProfileFrameUnlocked, getEquippedFrame, ProfileFrame } from '../../data/profileFramesData';
+import { ProfileAvatar } from '../common/ProfileAvatar';
 
 interface ProfileViewProps {
   stats: UserStats;
@@ -52,6 +56,7 @@ interface ProfileViewProps {
   onSelectTheme?: (theme: UserStats['activeTheme']) => void;
   onSelectProfileColor?: (color: string) => void;
   onEquipNameColor?: (nameColorId: string) => void;
+  onEquipFrame?: (frameId: string | undefined) => void;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
@@ -68,9 +73,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onSelectTheme,
   onSelectProfileColor,
   onEquipNameColor,
+  onEquipFrame,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [inventoryCategory, setInventoryCategory] = useState<'mascots' | 'accessories' | 'titles' | 'colors'>('mascots');
+  const [inventoryCategory, setInventoryCategory] = useState<'mascots' | 'accessories' | 'titles' | 'colors' | 'frames'>('mascots');
   const [themeToast, setThemeToast] = useState<string | null>(null);
   const [colorTarget, setColorTarget] = useState<'profile' | 'background' | 'both'>('profile');
   const [customColorHex, setCustomColorHex] = useState(stats.profileColor || '#10b981');
@@ -179,16 +185,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             />
 
             <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-5">
-              {/* Avatar with Dynamic Theme Border & Level Badge */}
-              <div className="relative group">
-                <img
-                  src={stats.avatarUrl}
-                  alt={stats.username}
-                  className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover border-4 transition-all duration-300 shadow-xl"
-                  style={{ borderColor: profileTheme.colorHex, boxShadow: `0 0 24px ${profileTheme.colorHex}40` }}
+              {/* Avatar with Equipped Frame & Level Badge */}
+              <div
+                className="relative group cursor-pointer"
+                onClick={() => {
+                  audio.playClick();
+                  setInventoryCategory('frames');
+                  const el = document.getElementById('molduras-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                title="Toque para ver e equipar molduras de perfil"
+              >
+                <ProfileAvatar
+                  avatarUrl={stats.avatarUrl}
+                  username={stats.username}
+                  frameId={stats.equippedFrame}
+                  size="xl"
+                  fallbackBorderColor={profileTheme.colorHex}
+                  showBadge={true}
                 />
                 <div
-                  className="absolute -bottom-2 inset-x-0 mx-auto w-fit px-2.5 py-0.5 rounded-full text-slate-950 font-black text-xs shadow-md transition-all duration-300"
+                  className="absolute -bottom-2 inset-x-0 mx-auto w-fit px-2.5 py-0.5 rounded-full text-slate-950 font-black text-xs shadow-md transition-all duration-300 z-30"
                   style={{ backgroundColor: profileTheme.colorHex }}
                 >
                   Nível {stats.level}
@@ -203,12 +220,44 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       {stats.username}
                     </h1>
                     
-                    {/* Active Title, Profile Color, Theme & Role Badges */}
+                    {/* Active Title, Profile Color, Frame, Theme & Role Badges */}
                     <div className="flex items-center justify-center sm:justify-start gap-2 mt-1 flex-wrap">
                       <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1">
                         <Award className="w-3.5 h-3.5" />
                         <span>{stats.activeTitle || 'Aprendiz Curioso'}</span>
                       </span>
+
+                      {/* Equipped Profile Frame Badge (or direct button to equip) */}
+                      {stats.equippedFrame && getEquippedFrame(stats.equippedFrame) ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            audio.playClick();
+                            setInventoryCategory('frames');
+                            const el = document.getElementById('molduras-section');
+                            if (el) el.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className={`text-xs font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90 ${getEquippedFrame(stats.equippedFrame)?.tagColor}`}
+                          title="Clique para gerenciar molduras de perfil"
+                        >
+                          <span>{getEquippedFrame(stats.equippedFrame)?.badgeEmoji}</span>
+                          <span>Moldura: {getEquippedFrame(stats.equippedFrame)?.name}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            audio.playClick();
+                            setInventoryCategory('frames');
+                            const el = document.getElementById('molduras-section');
+                            if (el) el.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="text-xs font-bold px-2.5 py-0.5 rounded-full border border-amber-500/50 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 flex items-center gap-1.5 shadow-sm cursor-pointer transition-all animate-pulse"
+                          title="Clique para escolher uma moldura de perfil conquistada"
+                        >
+                          <span>🖼️ Escolher Moldura</span>
+                        </button>
+                      )}
 
                       {/* Active Profile Color Badge */}
                       <span
@@ -720,6 +769,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <button
               onClick={() => {
                 audio.playClick();
+                setInventoryCategory('frames');
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                inventoryCategory === 'frames'
+                  ? 'bg-gradient-to-r from-amber-500 via-purple-600 to-cyan-500 text-white font-black shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>🖼️ Molduras ({PROFILE_FRAMES.filter((f) => isProfileFrameUnlocked(f, achievements, stats)).length}/{PROFILE_FRAMES.length})</span>
+            </button>
+
+            <button
+              onClick={() => {
+                audio.playClick();
                 setInventoryCategory('accessories');
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
@@ -1019,6 +1082,148 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         <span className="text-[11px] text-slate-500 text-center block">
                           🔒 Disponível na Loja ({nc.cost} 💎)
                         </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 5. PROFILE FRAMES INVENTORY (DESBLOQUEADAS POR MEDALHAS) */}
+        {inventoryCategory === 'frames' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-950 to-cyan-950/40 border border-purple-500/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-lg shadow-inner">
+                  🖼️
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-white flex items-center gap-2">
+                    <span>Molduras de Perfil Exclusivas</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-extrabold border border-purple-500/30">
+                      Conquistas & Medalhas
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Desbloqueie molduras lendárias conquistando medalhas na sua jornada. Salvo automaticamente na sua conta!
+                  </p>
+                </div>
+              </div>
+
+              {stats.equippedFrame && (
+                <button
+                  onClick={() => {
+                    audio.playClick();
+                    if (onEquipFrame) onEquipFrame(undefined);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Remover Moldura</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {PROFILE_FRAMES.map((frame) => {
+                const isUnlocked = isProfileFrameUnlocked(frame, achievements, stats);
+                const isEquipped = stats.equippedFrame === frame.id;
+
+                return (
+                  <div
+                    key={frame.id}
+                    className={`p-4 rounded-3xl border transition-all flex flex-col justify-between gap-3 relative overflow-hidden ${
+                      isEquipped
+                        ? 'bg-slate-900 border-white ring-2 ring-purple-500/50 shadow-2xl scale-[1.01]'
+                        : isUnlocked
+                        ? 'bg-slate-900/90 border-slate-800 hover:border-slate-700 hover:bg-slate-850'
+                        : 'bg-slate-950/70 border-slate-900/80 opacity-75'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3.5">
+                      {/* Live Avatar Preview with this Frame */}
+                      <div className="flex-shrink-0">
+                        <ProfileAvatar
+                          avatarUrl={stats.avatarUrl}
+                          username={stats.username}
+                          frameId={isUnlocked ? frame.id : undefined}
+                          size="lg"
+                          showBadge={true}
+                        />
+                      </div>
+
+                      {/* Frame Metadata */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${frame.tagColor}`}>
+                            {frame.badgeEmoji} {frame.rarityLabel}
+                          </span>
+                          {isEquipped && (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                              <Check className="w-2.5 h-2.5 stroke-[3]" /> Equipada
+                            </span>
+                          )}
+                        </div>
+
+                        <h4 className="text-sm font-black text-white truncate">{frame.name}</h4>
+                        <p className="text-xs text-slate-300 mt-1 leading-relaxed line-clamp-2">
+                          {frame.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Medal Requirement Info */}
+                    <div className="p-2.5 rounded-2xl bg-slate-950/80 border border-slate-850 text-xs flex items-center gap-2">
+                      <Award className={`w-4 h-4 flex-shrink-0 ${isUnlocked ? 'text-emerald-400' : 'text-amber-400'}`} />
+                      <div className="flex-1">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          {isUnlocked ? 'Requisito Conquistado' : 'Como Desbloquear'}
+                        </span>
+                        <span className={`text-[11px] font-semibold leading-tight ${isUnlocked ? 'text-emerald-300' : 'text-amber-200'}`}>
+                          {frame.requiredMedalDescription}
+                        </span>
+                      </div>
+                      {isUnlocked ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      ) : (
+                        <Lock className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                      )}
+                    </div>
+
+                    {/* Action Button */}
+                    <div className="pt-1">
+                      {isEquipped ? (
+                        <button
+                          onClick={() => {
+                            audio.playClick();
+                            if (onEquipFrame) onEquipFrame(undefined);
+                          }}
+                          className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40 border border-slate-700 text-slate-300 text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Remover Moldura</span>
+                        </button>
+                      ) : isUnlocked ? (
+                        <button
+                          onClick={() => {
+                            audio.playVictory();
+                            if (onEquipFrame) onEquipFrame(frame.id);
+                          }}
+                          className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white text-xs font-black transition-all cursor-pointer shadow-lg shadow-purple-500/20 flex items-center justify-center gap-1.5"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Equipar {frame.name}</span>
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="w-full py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-500 text-xs font-bold cursor-not-allowed flex items-center justify-center gap-1.5"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Bloqueada • Requer Medalha</span>
+                        </button>
                       )}
                     </div>
                   </div>

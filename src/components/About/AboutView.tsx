@@ -22,11 +22,13 @@ import { audio } from '../../services/audioService';
 interface AboutViewProps {
   onStartLearning: () => void;
   onOpenARStudio: () => void;
+  onOpenWelcome?: () => void;
 }
 
 export const AboutView: React.FC<AboutViewProps> = ({
   onStartLearning,
   onOpenARStudio,
+  onOpenWelcome,
 }) => {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
@@ -275,6 +277,22 @@ export const AboutView: React.FC<AboutViewProps> = ({
           LibrasGo AR • Versão 2.0 • Feito com dedicação para a inclusão social
         </div>
       </div>
+
+      {onOpenWelcome && (
+        <div className="pt-1 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              audio.playClick();
+              onOpenWelcome();
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 text-xs font-bold transition-all cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Ver Tela Inicial de Boas-Vindas</span>
+          </button>
+        </div>
+      )}
 
     </div>
   );

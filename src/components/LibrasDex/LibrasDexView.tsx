@@ -25,6 +25,7 @@ export const LibrasDexView: React.FC<LibrasDexViewProps> = ({
   const categories = [
     { id: 'todos', label: 'Todos os Sinais' },
     { id: 'comunidade', label: '🌟 Comunidade (Ensinados)' },
+    { id: 'expressoes_faciais', label: '😊 Expressões Faciais' },
     { id: 'alfabeto', label: 'Alfabeto Manual' },
     { id: 'saudacoes', label: 'Saudações' },
     { id: 'respostas', label: 'Respostas' },
@@ -45,8 +46,16 @@ export const LibrasDexView: React.FC<LibrasDexViewProps> = ({
     const isCommunity = Boolean(
       sign.isCustom ||
       sign.id.startsWith('taught_') ||
+      sign.id.startsWith('face_taught_') ||
       sign.category === ('comunidade' as any) ||
       sign.imageUrl
+    );
+
+    const isFacial = Boolean(
+      sign.id.startsWith('face_taught_') ||
+      sign.parameters?.cm?.includes('Não-Manual') ||
+      sign.parameters?.pa === 'Face / Expressão Visual' ||
+      sign.parameters?.pa === 'Rosto / Face'
     );
 
     const matchesCategory =
@@ -54,6 +63,8 @@ export const LibrasDexView: React.FC<LibrasDexViewProps> = ({
         ? true
         : selectedCategory === 'comunidade'
         ? isCommunity
+        : selectedCategory === 'expressoes_faciais'
+        ? isFacial
         : sign.category === selectedCategory;
 
     return matchesSearch && matchesCategory;
@@ -133,9 +144,13 @@ export const LibrasDexView: React.FC<LibrasDexViewProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className={`text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded-full ${
-                    isCommunity ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-slate-400'
+                    sign.id.startsWith('face_taught_')
+                      ? 'bg-blue-500/20 text-cyan-300 border border-blue-500/40'
+                      : isCommunity
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'text-slate-400'
                   }`}>
-                    {isCommunity ? '🌟 Comunidade' : sign.category}
+                    {sign.id.startsWith('face_taught_') ? '😊 Expressão Facial' : isCommunity ? '🌟 Comunidade' : sign.category}
                   </span>
                   {isMastered && (
                     <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5">

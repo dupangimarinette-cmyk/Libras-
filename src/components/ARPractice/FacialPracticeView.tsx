@@ -42,36 +42,67 @@ import { evaluateSignPose, Landmark } from '../../services/handTracker';
 import { FACIAL_EXERCISES, FacialExercise, FacialCategory } from '../../data/facialExercisesData';
 import { audio } from '../../services/audioService';
 import { FacialOverlay } from './FacialOverlay';
+import { learnedExpressionsService } from '../../services/learnedExpressionsService';
 
 interface FacialPracticeViewProps {
   userStats: UserStats;
   signs?: LibrasSign[];
+  isSuspended?: boolean;
   onCompleteExercise: (xp: number, gems: number, exerciseId: string, mascotItemId?: string) => void;
   onOpenSignStudio?: (signId?: string) => void;
+  onOpenTeachFacial?: () => void;
 }
 
 export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
   userStats,
   signs = [],
+  isSuspended = false,
   onCompleteExercise,
   onOpenSignStudio,
+  onOpenTeachFacial,
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<FacialCategory | 'todos' | 'livre'>('todos');
+  type FacialCategoryFilter = FacialCategory | 'todos' | 'livre' | 'ensinadas';
+  const [selectedCategory, setSelectedCategory] = useState<FacialCategoryFilter>('todos');
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
   const [isFreePracticeMode, setIsFreePracticeMode] = useState(false);
+  const [taughtExercises, setTaughtExercises] = useState<FacialExercise[]>([]);
 
-  // Filter exercises
-  const filteredExercises = selectedCategory === 'todos' || selectedCategory === 'livre'
-    ? FACIAL_EXERCISES
-    : FACIAL_EXERCISES.filter((ex) => ex.category === selectedCategory);
+  useEffect(() => {
+    learnedExpressionsService.fetchCommunityExpressions().then((expressions) => {
+      if (expressions && expressions.length > 0) {
+        const converted = expressions.map((exp) => learnedExpressionsService.convertToFacialExercise(exp));
+        setTaughtExercises(converted);
+      }
+    });
+  }, []);
+
+  // Filter exercises including taught expressions
+  const allExercises = React.useMemo(() => {
+    return [...FACIAL_EXERCISES, ...taughtExercises];
+  }, [taughtExercises]);
+
+  const filteredExercises = React.useMemo(() => {
+    if (selectedCategory === 'todos' || selectedCategory === 'livre') return allExercises;
+    if (selectedCategory === 'ensinadas') return taughtExercises;
+    return allExercises.filter((ex) => ex.category === selectedCategory);
+  }, [allExercises, taughtExercises, selectedCategory]);
 
   const currentExercise: FacialExercise = filteredExercises[activeExerciseIndex] || FACIAL_EXERCISES[0];
   const isAlreadyCompleted = (userStats.completedFacialExerciseIds || []).includes(currentExercise.id);
+
 
   // Video & Canvas Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+  const isSuccessRef = useRef<boolean>(false);
+  const lastFrameTimeRef = useRef<number>(0);
+  const onCompleteExerciseRef = useRef(onCompleteExercise);
+
+  useEffect(() => {
+    onCompleteExerciseRef.current = onCompleteExercise;
+  }, [onCompleteExercise]);
 
   // Camera & Tracking states
   const [cameraActive, setCameraActive] = useState(false);
@@ -97,6 +128,18 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
   const [handDetected, setHandDetected] = useState(false);
   const [handAccuracy, setHandAccuracy] = useState(0);
 
+  // High-performance refs to decouple 60FPS video analysis from React lifecycle
+  const facialStateRef = useRef<FacialTrackingState>(facialState);
+  const handDetectedRef = useRef<boolean>(false);
+  const handAccuracyRef = useRef<number>(0);
+  const currentExerciseRef = useRef<FacialExercise>(currentExercise);
+  const isAlreadyCompletedRef = useRef<boolean>(isAlreadyCompleted);
+
+  useEffect(() => {
+    currentExerciseRef.current = currentExercise;
+    isAlreadyCompletedRef.current = isAlreadyCompleted;
+  }, [currentExercise, isAlreadyCompleted]);
+
   // Hold progress for challenge validation
   const [holdProgress, setHoldProgress] = useState(0);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -107,6 +150,11 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
   const lastMatchTimestampRef = useRef<number>(0);
   const isProcessingRef = useRef(false);
 
+  // Keep isSuccessRef in sync with state
+  useEffect(() => {
+    isSuccessRef.current = isSuccess;
+  }, [isSuccess]);
+
   // Manual fallback simulation sliders for accessibility or when camera is blocked
   const [simulationActive, setSimulationActive] = useState(false);
   const [simEyebrows, setSimEyebrows] = useState<EyebrowsState>('neutral');
@@ -114,11 +162,43 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
   const [simMouth, setSimMouth] = useState<MouthState>('neutral');
   const [simHandActive, setSimHandActive] = useState(false);
 
-  // Start Camera
+  // Reactive simulation state update (only updates on actual slider/button changes, not 60 FPS)
+  useEffect(() => {
+    if (!simulationActive) return;
+    const simState: FacialTrackingState = {
+      isFaceDetected: true,
+      confidence: 95,
+      headPose: {
+        yaw: simMovement === 'shake_no' ? 22 : 0,
+        pitch: 0,
+        roll: 0,
+        movement: simMovement,
+        isNoddingYes: simMovement === 'nod_yes',
+        isShakingNo: simMovement === 'shake_no',
+      },
+      eyebrowsState: simEyebrows,
+      eyebrowRaiseScore: simEyebrows === 'raised' ? 85 : simEyebrows === 'furrowed' ? 20 : 50,
+      mouthState: simMouth,
+      mouthOpenScore: simMouth === 'open' ? 75 : simMouth === 'smile' ? 55 : 20,
+      eyeBlink: { left: false, right: false },
+      landmarks: null,
+      feedbackMessage: 'Modo simulador assistivo ativo.',
+      detectedExpressions: [simEyebrows, simMovement, simMouth].filter((s) => s !== 'neutral'),
+    };
+    facialStateRef.current = simState;
+    handDetectedRef.current = simHandActive;
+    handAccuracyRef.current = simHandActive ? 94 : 0;
+    setFacialState(simState);
+    setHandDetected(simHandActive);
+    setHandAccuracy(simHandActive ? 94 : 0);
+  }, [simulationActive, simEyebrows, simMovement, simMouth, simHandActive]);
+
+  // Start Camera with unmount-safety check
   const startCamera = useCallback(async () => {
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -130,16 +210,26 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
         audio: false,
       });
 
+      if (!isMountedRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('Video play delayed:', playErr);
+        }
       }
 
       setCameraActive(true);
       setCameraPermissionGranted(true);
       setCameraError(null);
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       console.warn('Erro ao ligar câmera frontal:', err);
       setCameraPermissionGranted(false);
       setCameraActive(false);
@@ -153,8 +243,18 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current.getTracks().forEach((t) => {
+        try {
+          t.stop();
+        } catch {}
+      });
       streamRef.current = null;
+    }
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch {}
+      videoRef.current.srcObject = null;
     }
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
@@ -164,17 +264,24 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
   }, []);
 
   useEffect(() => {
+    if (isSuspended) {
+      stopCamera();
+      return;
+    }
+    isMountedRef.current = true;
     startCamera();
     return () => {
+      isMountedRef.current = false;
       stopCamera();
     };
-  }, [startCamera, stopCamera]);
+  }, [isSuspended, startCamera, stopCamera]);
 
   // Handle Switch Exercise
   const handleSelectExercise = (idx: number) => {
     audio.playClick();
     setActiveExerciseIndex(idx);
     setIsSuccess(false);
+    isSuccessRef.current = false;
     setHoldProgress(0);
     holdStartRef.current = null;
   };
@@ -191,187 +298,190 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
     handleSelectExercise(prevIdx);
   };
 
-  // Continuous Analysis Loop
+  // Continuous Analysis Loop (Decoupled with Refs, Zero-Teardown, 60fps Safe)
   useEffect(() => {
-    let isMounted = true;
+    let animId: number | null = null;
 
     const runFrame = () => {
-      if (!isMounted) return;
+      if (!isMountedRef.current) return;
+
+      const exercise = currentExerciseRef.current;
+      const alreadyCompleted = isAlreadyCompletedRef.current;
 
       if (simulationActive) {
-        // Simulated values for accessibility
-        setFacialState({
-          isFaceDetected: true,
-          confidence: 95,
-          headPose: {
-            yaw: simMovement === 'shake_no' ? 22 : 0,
-            pitch: 0,
-            roll: 0,
-            movement: simMovement,
-            isNoddingYes: simMovement === 'nod_yes',
-            isShakingNo: simMovement === 'shake_no',
-          },
-          eyebrowsState: simEyebrows,
-          eyebrowRaiseScore: simEyebrows === 'raised' ? 85 : simEyebrows === 'furrowed' ? 20 : 50,
-          mouthState: simMouth,
-          mouthOpenScore: simMouth === 'open' ? 75 : simMouth === 'smile' ? 55 : 20,
-          eyeBlink: { left: false, right: false },
-          landmarks: null,
-          feedbackMessage: 'Modo simulador assistivo ativo.',
-          detectedExpressions: [simEyebrows, simMovement, simMouth].filter((s) => s !== 'neutral'),
-        });
-        setHandDetected(simHandActive);
-        setHandAccuracy(simHandActive ? 94 : 0);
-      } else if (videoRef.current && videoRef.current.readyState >= 2 && !isProcessingRef.current) {
-        isProcessingRef.current = true;
-
-        // 1. Analyze Facial features
-        const state = facialTracker.analyzeFace(videoRef.current);
-        setFacialState(state);
-
-        // 2. If exercise requires hand, evaluate hand position with built-in optical tracker
-        let isHandNow = false;
-        if (currentExercise.requiresHand) {
-          const handLandmarks = opticalTracker.detectHand(videoRef.current);
-          if (handLandmarks && handLandmarks.length >= 21) {
-            isHandNow = true;
-            setHandDetected(true);
-            setHandAccuracy(88);
-          } else {
-            setHandDetected(false);
-            setHandAccuracy(0);
+        // Simulation mode condition evaluation
+        if (!isFreePracticeMode && !isSuccessRef.current) {
+          let meetsFaceCondition = true;
+          if (exercise.targetEyebrows && simEyebrows !== exercise.targetEyebrows) {
+            meetsFaceCondition = false;
           }
-        } else {
-          setHandDetected(false);
-          setHandAccuracy(0);
-        }
-
-        isProcessingRef.current = false;
-
-        // Check Exercise Conditions immediately on current frame
-        if (!isFreePracticeMode && !isSuccess) {
-          const effectiveFaceDetected = state.isFaceDetected;
-          let meetsFaceCondition = effectiveFaceDetected;
-
-          // Eyebrows requirement
-          if (currentExercise.targetEyebrows === 'raised') {
-            if (state.eyebrowsState !== 'raised' && state.eyebrowRaiseScore < 51) {
-              meetsFaceCondition = false;
-            }
-          } else if (currentExercise.targetEyebrows === 'furrowed') {
-            if (state.eyebrowsState !== 'furrowed' && state.eyebrowRaiseScore > 49) {
-              meetsFaceCondition = false;
-            }
+          if (exercise.targetHeadMovement && simMovement !== exercise.targetHeadMovement) {
+            meetsFaceCondition = false;
           }
-
-          // Head movement requirement
-          if (currentExercise.targetHeadMovement === 'nod_yes') {
-            if (!state.headPose.isNoddingYes && state.headPose.movement !== 'nod_yes' && Math.abs(state.headPose.pitch) < 5) {
-              meetsFaceCondition = false;
-            }
-          } else if (currentExercise.targetHeadMovement === 'shake_no') {
-            if (!state.headPose.isShakingNo && state.headPose.movement !== 'shake_no' && Math.abs(state.headPose.yaw) < 6) {
-              meetsFaceCondition = false;
-            }
+          if (exercise.targetMouth && simMouth !== exercise.targetMouth) {
+            meetsFaceCondition = false;
           }
-
-          // Mouth requirement
-          if (currentExercise.targetMouth === 'smile') {
-            if (state.mouthState !== 'smile' && state.mouthOpenScore < 20) {
-              meetsFaceCondition = false;
-            }
-          } else if (currentExercise.targetMouth === 'open') {
-            if (state.mouthState !== 'open' && state.mouthOpenScore < 36) {
-              meetsFaceCondition = false;
-            }
-          }
-
-          // Hand requirement
           let meetsHandCondition = true;
-          if (currentExercise.requiresHand && !isHandNow && handAccuracy < 30) {
+          if (exercise.requiresHand && !simHandActive) {
             meetsHandCondition = false;
           }
 
-          const conditionMet = meetsFaceCondition && meetsHandCondition;
-          const now = Date.now();
-
-          if (conditionMet) {
-            lastMatchTimestampRef.current = now;
-            if (!holdStartRef.current) {
-              holdStartRef.current = now;
-            }
-            const elapsed = (now - holdStartRef.current) / 1000;
-            const targetHold = 0.6;
-            const pct = Math.min(100, Math.round((elapsed / targetHold) * 100));
-            setHoldProgress(pct);
-
-            if (pct >= 100) {
-              setIsSuccess(true);
-              audio.playSuccess();
-              confetti({
-                particleCount: 75,
-                spread: 70,
-                origin: { y: 0.6 },
-                colors: ['#10b981', '#6366f1', '#38bdf8', '#fbbf24'],
-              });
-
-              const earnedXp = isAlreadyCompleted ? 0 : currentExercise.xpReward;
-              const earnedGems = isAlreadyCompleted ? 0 : currentExercise.gemsReward;
-
-              setCelebrationDetails({
-                xp: earnedXp,
-                gems: earnedGems,
-                item: currentExercise.mascotRewardItemId,
-              });
-              setShowCelebrationModal(true);
-
-              onCompleteExercise(earnedXp, earnedGems, currentExercise.id, currentExercise.mascotRewardItemId);
-            }
-          } else {
-            // Grace period: allow 450ms before breaking hold
-            if (now - lastMatchTimestampRef.current > 450) {
-              holdStartRef.current = null;
-              setHoldProgress((prev) => Math.max(0, prev - 8));
-            }
+          if (meetsFaceCondition && meetsHandCondition && !isSuccessRef.current) {
+            isSuccessRef.current = true;
+            setHoldProgress(100);
+            setIsSuccess(true);
+            audio.playSuccess();
+            confetti({ particleCount: 75, spread: 70, origin: { y: 0.6 } });
+            const earnedXp = alreadyCompleted ? 0 : exercise.xpReward;
+            const earnedGems = alreadyCompleted ? 0 : exercise.gemsReward;
+            setCelebrationDetails({ xp: earnedXp, gems: earnedGems, item: exercise.mascotRewardItemId });
+            setShowCelebrationModal(true);
+            onCompleteExerciseRef.current(earnedXp, earnedGems, exercise.id, exercise.mascotRewardItemId);
           }
         }
-      } else if (simulationActive && !isFreePracticeMode && !isSuccess) {
-        // Simulation mode condition evaluation
-        let meetsFaceCondition = true;
-        if (currentExercise.targetEyebrows && simEyebrows !== currentExercise.targetEyebrows) {
-          meetsFaceCondition = false;
-        }
-        if (currentExercise.targetHeadMovement && simMovement !== currentExercise.targetHeadMovement) {
-          meetsFaceCondition = false;
-        }
-        if (currentExercise.targetMouth && simMouth !== currentExercise.targetMouth) {
-          meetsFaceCondition = false;
-        }
-        let meetsHandCondition = true;
-        if (currentExercise.requiresHand && !simHandActive) {
-          meetsHandCondition = false;
-        }
+        // Throttled frame loop in simulation mode (~15 FPS)
+        animId = requestAnimationFrame(runFrame);
+        animFrameRef.current = animId;
+        return;
+      }
 
-        if (meetsFaceCondition && meetsHandCondition) {
-          setHoldProgress(100);
-          setIsSuccess(true);
-          audio.playSuccess();
-          confetti({ particleCount: 75, spread: 70, origin: { y: 0.6 } });
-          const earnedXp = isAlreadyCompleted ? 0 : currentExercise.xpReward;
-          const earnedGems = isAlreadyCompleted ? 0 : currentExercise.gemsReward;
-          setCelebrationDetails({ xp: earnedXp, gems: earnedGems, item: currentExercise.mascotRewardItemId });
-          setShowCelebrationModal(true);
-          onCompleteExercise(earnedXp, earnedGems, currentExercise.id, currentExercise.mascotRewardItemId);
+      // Camera mode: Throttle analysis to ~20 FPS (every 48ms) to ensure smooth 60fps UI and zero CPU lockup
+      const now = performance.now();
+      if (now - lastFrameTimeRef.current < 48) {
+        animId = requestAnimationFrame(runFrame);
+        animFrameRef.current = animId;
+        return;
+      }
+      lastFrameTimeRef.current = now;
+
+      if (videoRef.current && videoRef.current.readyState >= 2 && !isProcessingRef.current) {
+        isProcessingRef.current = true;
+
+        try {
+          // 1. Analyze Facial features
+          const state = facialTracker.analyzeFace(videoRef.current);
+          facialStateRef.current = state;
+          setFacialState(state);
+
+          // 2. If exercise requires hand, evaluate hand position with optical tracker
+          let isHandNow = false;
+          let currentHandAcc = 0;
+          if (exercise.requiresHand) {
+            const handLandmarks = opticalTracker.detectHand(videoRef.current);
+            if (handLandmarks && handLandmarks.length >= 21) {
+              isHandNow = true;
+              currentHandAcc = 88;
+            }
+          }
+          handDetectedRef.current = isHandNow;
+          handAccuracyRef.current = currentHandAcc;
+          setHandDetected(isHandNow);
+          setHandAccuracy(currentHandAcc);
+
+          // Check Exercise Conditions immediately on current frame
+          if (!isFreePracticeMode && !isSuccessRef.current) {
+            const effectiveFaceDetected = state.isFaceDetected;
+            let meetsFaceCondition = effectiveFaceDetected;
+
+            // Eyebrows requirement
+            if (exercise.targetEyebrows === 'raised') {
+              if (state.eyebrowsState !== 'raised' && state.eyebrowRaiseScore < 51) {
+                meetsFaceCondition = false;
+              }
+            } else if (exercise.targetEyebrows === 'furrowed') {
+              if (state.eyebrowsState !== 'furrowed' && state.eyebrowRaiseScore > 49) {
+                meetsFaceCondition = false;
+              }
+            }
+
+            // Head movement requirement
+            if (exercise.targetHeadMovement === 'nod_yes') {
+              if (!state.headPose.isNoddingYes && state.headPose.movement !== 'nod_yes' && Math.abs(state.headPose.pitch) < 5) {
+                meetsFaceCondition = false;
+              }
+            } else if (exercise.targetHeadMovement === 'shake_no') {
+              if (!state.headPose.isShakingNo && state.headPose.movement !== 'shake_no' && Math.abs(state.headPose.yaw) < 6) {
+                meetsFaceCondition = false;
+              }
+            }
+
+            // Mouth requirement
+            if (exercise.targetMouth === 'smile') {
+              if (state.mouthState !== 'smile' && state.mouthOpenScore < 20) {
+                meetsFaceCondition = false;
+              }
+            } else if (exercise.targetMouth === 'open') {
+              if (state.mouthState !== 'open' && state.mouthOpenScore < 36) {
+                meetsFaceCondition = false;
+              }
+            }
+
+            // Hand requirement
+            let meetsHandCondition = true;
+            if (exercise.requiresHand && !isHandNow && currentHandAcc < 30) {
+              meetsHandCondition = false;
+            }
+
+            const conditionMet = meetsFaceCondition && meetsHandCondition;
+            const currentTime = Date.now();
+
+            if (conditionMet) {
+              lastMatchTimestampRef.current = currentTime;
+              if (!holdStartRef.current) {
+                holdStartRef.current = currentTime;
+              }
+              const elapsed = (currentTime - holdStartRef.current) / 1000;
+              const targetHold = 0.6;
+              const pct = Math.min(100, Math.round((elapsed / targetHold) * 100));
+              setHoldProgress(pct);
+
+              if (pct >= 100 && !isSuccessRef.current) {
+                isSuccessRef.current = true;
+                setIsSuccess(true);
+                audio.playSuccess();
+                confetti({
+                  particleCount: 75,
+                  spread: 70,
+                  origin: { y: 0.6 },
+                  colors: ['#10b981', '#6366f1', '#38bdf8', '#fbbf24'],
+                });
+
+                const earnedXp = alreadyCompleted ? 0 : exercise.xpReward;
+                const earnedGems = alreadyCompleted ? 0 : exercise.gemsReward;
+
+                setCelebrationDetails({
+                  xp: earnedXp,
+                  gems: earnedGems,
+                  item: exercise.mascotRewardItemId,
+                });
+                setShowCelebrationModal(true);
+
+                onCompleteExerciseRef.current(earnedXp, earnedGems, exercise.id, exercise.mascotRewardItemId);
+              }
+            } else {
+              // Grace period: allow 450ms before breaking hold
+              if (currentTime - lastMatchTimestampRef.current > 450) {
+                holdStartRef.current = null;
+                setHoldProgress((prev) => Math.max(0, prev - 8));
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Facial analysis tick skipped:', err);
+        } finally {
+          isProcessingRef.current = false;
         }
       }
 
-      animFrameRef.current = requestAnimationFrame(runFrame);
+      animId = requestAnimationFrame(runFrame);
+      animFrameRef.current = animId;
     };
 
-    animFrameRef.current = requestAnimationFrame(runFrame);
+    animId = requestAnimationFrame(runFrame);
+    animFrameRef.current = animId;
 
     return () => {
-      isMounted = false;
+      if (animId) cancelAnimationFrame(animId);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [
@@ -381,13 +491,7 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
     simMovement,
     simMouth,
     simHandActive,
-    facialState,
-    handDetected,
-    currentExercise,
     isFreePracticeMode,
-    isSuccess,
-    isAlreadyCompleted,
-    onCompleteExercise,
   ]);
 
   // Generate Real-time Intelligent Guidance Text
@@ -494,6 +598,20 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
 
           {/* Quick Actions & Camera toggle */}
           <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {onOpenTeachFacial && (
+              <button
+                onClick={() => {
+                  audio.playClick();
+                  onOpenTeachFacial();
+                }}
+                className="px-3 py-2 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-black shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                title="Abrir estúdio para ensinar novas expressões faciais à IA"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+                <span>Ensinar Expressões à IA</span>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 audio.playClick();
@@ -539,8 +657,27 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
             }`}
           >
-            Todos os Desafios ({FACIAL_EXERCISES.length})
+            Todos os Desafios ({allExercises.length})
           </button>
+
+          {taughtExercises.length > 0 && (
+            <button
+              onClick={() => {
+                audio.playClick();
+                setSelectedCategory('ensinadas');
+                setIsFreePracticeMode(false);
+                setActiveExerciseIndex(0);
+              }}
+              className={`px-3.5 py-1.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                selectedCategory === 'ensinadas'
+                  ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-slate-950 font-black shadow-lg shadow-cyan-500/30'
+                  : 'bg-slate-800/80 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30'
+              }`}
+            >
+              🎓 Expressões Ensinadas ({taughtExercises.length})
+            </button>
+          )}
+
 
           <button
             onClick={() => {
