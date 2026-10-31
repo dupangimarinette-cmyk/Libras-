@@ -14,6 +14,7 @@ import { ProfileView } from './components/Profile/ProfileView';
 import { LoginView } from './components/Auth/LoginView';
 import { AdminDashboard, AdminTab } from './components/Admin/AdminDashboard';
 import { RedeemView } from './components/Redeem/RedeemView';
+import { SignupGateModal } from './components/Auth/SignupGateModal';
 import { FeedbackView } from './components/Feedback/FeedbackView';
 
 import { UserStats, Lesson, LearningModule, DailyMission, LeaderboardEntry, MysteryChest, MascotItem, AdminSession, UserRole, SyncStatus, LibrasSign, TaughtSign, TaughtFacialExpression, FriendUser, WeeklyChallenge } from './types/libras';
@@ -618,7 +619,7 @@ export default function App() {
     const cleanUsername = username.trim();
     if (!cleanUsername) return;
     const normalizedUsername = cleanUsername.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    if (['marinette', 'carlos andrade real'].includes(normalizedUsername) || /^(bot_|testbot|fake_|ai_|ia_)/.test(normalizedUsername)) return;
+    if (['carlos andrade real'].includes(normalizedUsername) || /^(bot_|testbot|fake_|ai_|ia_)/.test(normalizedUsername)) return;
 
     // Check if an existing profile exists in the cloud database for this user
     const restored = await storageService.restoreFromCloud(cleanUsername);
@@ -1000,7 +1001,7 @@ export default function App() {
 
   return (
     <div
-      className="min-h-screen flex flex-col font-sans transition-colors duration-500 selection:bg-emerald-500 selection:text-slate-950 relative"
+      className="min-h-screen flex flex-col font-sans transition-colors duration-500 selection:bg-emerald-500 selection:text-slate-950 relative w-full max-w-full overflow-x-hidden"
       style={getThemeBackgroundStyle(userStats.activeTheme)}
     >
       
@@ -1025,7 +1026,7 @@ export default function App() {
       />
 
       {/* Main Tab Views */}
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col w-full max-w-full overflow-x-hidden pb-24 sm:pb-20">
         {activeTab === 'path' && (
           <PathView
             userStats={userStats}
@@ -1246,6 +1247,8 @@ export default function App() {
           onClose={() => setActiveLesson(null)}
         />
       )}
+
+      <SignupGateModal />
 
       {/* Bottom Sticky Navigation */}
       <Navigation

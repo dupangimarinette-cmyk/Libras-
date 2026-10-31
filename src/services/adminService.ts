@@ -113,8 +113,17 @@ export const adminService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
       });
-      const data = await res.json();
-      return data;
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        // resposta que não é JSON: quase sempre o servidor antigo/travado
+      }
+      if (data && typeof data.message === 'string') return data;
+      return {
+        success: false,
+        message: `O servidor respondeu com erro (código ${res.status}). Confirme que o server.ts novo foi salvo e reinicie o app.`,
+      };
     } catch {
       return { success: false, message: 'Não foi possível conectar ao servidor para recuperar a senha.' };
     }

@@ -196,13 +196,13 @@ export const Header: React.FC<HeaderProps> = ({
             {/* PWA Compact Install Button */}
             <PWAInstallBanner compact={true} />
 
-            {/* Info / About Button */}
+            {/* Info / About Button (Desktop / Tablet - Logo opens on mobile) */}
             <button
               onClick={() => {
                 audio.playClick();
                 onOpenAbout();
               }}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-400 hover:text-white transition-all cursor-pointer"
+              className="hidden sm:flex p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-400 hover:text-white transition-all cursor-pointer"
               title="Sobre o aplicativo e informações"
               aria-label="Sobre o aplicativo"
             >

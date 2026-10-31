@@ -880,5 +880,245 @@
     "createdAt": "2026-10-16T16:07:28.721Z",
     "updatedAt": "2026-10-29T10:00:00.000Z",
     "role": "admin"
+  },
+  "LIB-5424": {
+    "syncCode": "LIB-5424",
+    "username": "Camila Libras",
+    "userStats": {
+      "username": "Camila Libras",
+      "syncCode": "LIB-5424",
+      "xp": 0,
+      "level": 1,
+      "gems": 0,
+      "hearts": 5,
+      "streak": 0,
+      "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150",
+      "bio": "Aprendendo a Língua Brasileira de Sinais com Realidade Aumentada! 🤟",
+      "isLoggedIn": true,
+      "role": "learner",
+      "completedLessonIds": [],
+      "claimedChestIds": [],
+      "signMastery": {},
+      "perfectSignsCount": 0,
+      "hasStreakFreeze": false,
+      "activeTheme": "neon-cyber",
+      "profileColor": "#10b981",
+      "soundEnabled": true,
+      "hapticEnabled": true,
+      "activeTitle": "Aprendiz Curioso",
+      "unlockedTitles": [
+        "Aprendiz Curioso"
+      ],
+      "unlockedMascotItems": [],
+      "equippedMascot": {
+        "outfit": "none",
+        "hat": "none",
+        "glasses": "none",
+        "skin": "skin_esmeralda"
+      },
+      "unlockedNameColors": [
+        "gold"
+      ],
+      "unopenedChestsCount": 0,
+      "redeemedPromoCodes": [],
+      "lastCloudSynced": "2026-10-31T13:05:15.246Z",
+      "createdAt": "2026-10-31T13:05:15.250Z"
+    },
+    "missions": [],
+    "taughtSigns": [],
+    "taughtFacialExpressions": [],
+    "createdAt": "2026-10-31T13:05:15.250Z",
+    "updatedAt": "2026-10-31T13:05:15.250Z",
+    "gainCredit": {
+      "gems": 4000,
+      "xp": 4000,
+      "at": "2026-10-31T13:05:15.250Z"
+    },
+    "authKeyHashes": [
+      "e723417ab8c275f9c1cb89bbbe833fee67ed2ef6946451661b139d1829bf5e11"
+    ],
+    "signupIpHash": "027001f52a8ecbb2",
+    "signupAt": "2026-10-31T13:05:15.250Z"
+  },
+  "USER_camila libras": {
+    "syncCode": "LIB-5424",
+    "username": "Camila Libras",
+    "userStats": {
+      "username": "Camila Libras",
+      "syncCode": "LIB-5424",
+      "xp": 0,
+      "level": 1,
+      "gems": 0,
+      "hearts": 5,
+      "streak": 0,
+      "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150",
+      "bio": "Aprendendo a Língua Brasileira de Sinais com Realidade Aumentada! 🤟",
+      "isLoggedIn": true,
+      "role": "learner",
+      "completedLessonIds": [],
+      "claimedChestIds": [],
+      "signMastery": {},
+      "perfectSignsCount": 0,
+      "hasStreakFreeze": false,
+      "activeTheme": "neon-cyber",
+      "profileColor": "#10b981",
+      "soundEnabled": true,
+      "hapticEnabled": true,
+      "activeTitle": "Aprendiz Curioso",
+      "unlockedTitles": [
+        "Aprendiz Curioso"
+      ],
+      "unlockedMascotItems": [],
+      "equippedMascot": {
+        "outfit": "none",
+        "hat": "none",
+        "glasses": "none",
+        "skin": "skin_esmeralda"
+      },
+      "unlockedNameColors": [
+        "gold"
+      ],
+      "unopenedChestsCount": 0,
+      "redeemedPromoCodes": [],
+      "lastCloudSynced": "2026-10-31T13:05:15.246Z",
+      "createdAt": "2026-10-31T13:05:15.250Z"
+    },
+    "missions": [],
+    "taughtSigns": [],
+    "taughtFacialExpressions": [],
+    "createdAt": "2026-10-31T13:05:15.250Z",
+    "updatedAt": "2026-10-31T13:05:15.250Z",
+    "gainCredit": {
+      "gems": 4000,
+      "xp": 4000,
+      "at": "2026-10-31T13:05:15.250Z"
+    },
+    "authKeyHashes": [
+      "e723417ab8c275f9c1cb89bbbe833fee67ed2ef6946451661b139d1829bf5e11"
+    ],
+    "signupIpHash": "027001f52a8ecbb2",
+    "signupAt": "2026-10-31T13:05:15.250Z"
+  },
+  "LIB-3825": {
+    "syncCode": "LIB-3825",
+    "username": "Larissa Estuda Libras",
+    "userStats": {
+      "username": "Larissa Estuda Libras",
+      "syncCode": "LIB-3825",
+      "xp": 25,
+      "level": 1,
+      "gems": 10,
+      "hearts": 5,
+      "streak": 1,
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
+      "bio": "Aprendendo Libras!",
+      "isLoggedIn": true,
+      "role": "learner",
+      "completedLessonIds": [
+        "lesson_1"
+      ],
+      "claimedChestIds": [],
+      "signMastery": {},
+      "perfectSignsCount": 0,
+      "hasStreakFreeze": false,
+      "activeTheme": "neon-cyber",
+      "profileColor": "#10b981",
+      "soundEnabled": true,
+      "hapticEnabled": true,
+      "activeTitle": "Aprendiz Curioso",
+      "unlockedTitles": [
+        "Aprendiz Curioso"
+      ],
+      "unlockedMascotItems": [],
+      "equippedMascot": {
+        "outfit": "none",
+        "hat": "none",
+        "glasses": "none",
+        "skin": "skin_esmeralda"
+      },
+      "unlockedNameColors": [
+        "gold"
+      ],
+      "unopenedChestsCount": 0,
+      "redeemedPromoCodes": [],
+      "lastCloudSynced": "2026-10-31T13:06:34.164Z",
+      "createdAt": "2026-10-31T13:06:34.178Z"
+    },
+    "missions": [],
+    "taughtSigns": [],
+    "taughtFacialExpressions": [],
+    "createdAt": "2026-10-31T13:06:34.178Z",
+    "updatedAt": "2026-10-31T13:06:34.178Z",
+    "gainCredit": {
+      "gems": 4000,
+      "xp": 4000,
+      "at": "2026-10-31T13:06:34.177Z"
+    },
+    "authKeyHashes": [
+      "3b92234df8459c03eae9603f4f4d10ee7d8e3d05e234a8828050136c23e0aed6"
+    ],
+    "signupIpHash": "ca54442024f13589",
+    "signupAt": "2026-10-31T13:06:34.178Z"
+  },
+  "USER_larissa estuda libras": {
+    "syncCode": "LIB-3825",
+    "username": "Larissa Estuda Libras",
+    "userStats": {
+      "username": "Larissa Estuda Libras",
+      "syncCode": "LIB-3825",
+      "xp": 25,
+      "level": 1,
+      "gems": 10,
+      "hearts": 5,
+      "streak": 1,
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
+      "bio": "Aprendendo Libras!",
+      "isLoggedIn": true,
+      "role": "learner",
+      "completedLessonIds": [
+        "lesson_1"
+      ],
+      "claimedChestIds": [],
+      "signMastery": {},
+      "perfectSignsCount": 0,
+      "hasStreakFreeze": false,
+      "activeTheme": "neon-cyber",
+      "profileColor": "#10b981",
+      "soundEnabled": true,
+      "hapticEnabled": true,
+      "activeTitle": "Aprendiz Curioso",
+      "unlockedTitles": [
+        "Aprendiz Curioso"
+      ],
+      "unlockedMascotItems": [],
+      "equippedMascot": {
+        "outfit": "none",
+        "hat": "none",
+        "glasses": "none",
+        "skin": "skin_esmeralda"
+      },
+      "unlockedNameColors": [
+        "gold"
+      ],
+      "unopenedChestsCount": 0,
+      "redeemedPromoCodes": [],
+      "lastCloudSynced": "2026-10-31T13:06:34.164Z",
+      "createdAt": "2026-10-31T13:06:34.178Z"
+    },
+    "missions": [],
+    "taughtSigns": [],
+    "taughtFacialExpressions": [],
+    "createdAt": "2026-10-31T13:06:34.178Z",
+    "updatedAt": "2026-10-31T13:06:34.178Z",
+    "gainCredit": {
+      "gems": 4000,
+      "xp": 4000,
+      "at": "2026-10-31T13:06:34.177Z"
+    },
+    "authKeyHashes": [
+      "3b92234df8459c03eae9603f4f4d10ee7d8e3d05e234a8828050136c23e0aed6"
+    ],
+    "signupIpHash": "ca54442024f13589",
+    "signupAt": "2026-10-31T13:06:34.178Z"
   }
 }

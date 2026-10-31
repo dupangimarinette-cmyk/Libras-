@@ -1,41 +1,20 @@
-# LibrasGo: segurança (admin + contas de alunos) — pacote completo
+# LibrasGo: bloqueio de contas falsas (robôs/IA) + exclusão em lote
 
-Este pacote **substitui** o anterior: inclui tudo da etapa do painel admin e a Etapa A (alunos).
+Substitua estes arquivos (mesmos caminhos do projeto) e adicione os novos. Não mexa em `admin_state.json` nem `sync_data.json`.
 
-## Arquivos
-Novos: `src/services/adminFetch.ts`, `src/services/userAuth.ts`, `src/utils/syncCode.ts`
-Alterados: `server.ts`, `firestore.rules`, `security_spec.md`, `src/App.tsx`,
-`src/services/{adminService,contentService,storageService,shopService,aiSignLearner}.ts`,
-`src/components/Auth/LoginView.tsx`, `src/components/Admin/AdminDashboard.tsx`,
-`src/components/Leaderboard/LeaderboardView.tsx`
+Novos: `src/services/humanCheck.ts`, `src/components/Auth/HumanCheck.tsx`, `src/components/Auth/SignupGateModal.tsx`, `src/components/Admin/SuspectAccountsPanel.tsx`
+Alterados: `server.ts`, `src/App.tsx`, `src/services/storageService.ts`, `src/components/Auth/LoginView.tsx`, `src/components/Admin/AdminDashboard.tsx`
 
-**Não** substitua `admin_state.json` nem `sync_data.json` (são os seus dados).
-Aplique todos juntos: o app e o servidor mudam juntos.
+## Como funciona
+- Conta nova só é criada com um "passe" de verificação humana (uso único). Quem já tem conta não vê nada diferente.
+- A verificação padrão é uma pergunta simples (ex.: "Quanto é 7 mais 5?") + armadilha invisível + tempo mínimo de 2,5 s + limites por rede.
+- Limite: 8 contas novas por hora por rede/IP. Em escola com muitos alunos na mesma rede, aumente `newAccountsPerIpPerHour` em `SIGNUP_LIMITS` (topo do bloco ANTI-BOT no `server.ts`).
+- Nomes de robô/IA, links e só números/símbolos são recusados no cadastro.
+- Admin > Alunos: painel "Contas suspeitas" com exclusão em lote (com confirmação). Mostra também contas de nome de robô que a lista normal escondia.
 
-## O que muda para os alunos
-- Cada conta ganha uma chave secreta, guardada no aparelho. Contas que já existem recebem a chave no primeiro salvamento depois da atualização (acontece sozinho, sem o aluno fazer nada).
-- Para entrar em outro aparelho, só o **Código de Sincronização** serve. Restaurar só pelo nome de usuário deixou de funcionar (era assim que dava para tomar a conta de outra pessoa).
-- Novos códigos têm 8 caracteres aleatórios (ex.: `LIB-K7M2Q9XD`). Os antigos, de 4 números, continuam valendo.
-- O código não aparece mais no ranking nem na busca.
-
-## O que o servidor passou a fazer
-- Preço da loja: vem do catálogo do servidor. O valor enviado pelo app é ignorado.
-- Ganho de diamantes/XP: limitado por um crédito que recarrega com o tempo. Aumento absurdo é recusado e fica no registro de auditoria do admin ("Salvamento Recusado").
-- Ofensiva: sobe no máximo 1 por dia. Bônus diário: a data não pode ser voltada para resgatar de novo.
-- Sinais ensinados: só o dono apaga os seus (antes, qualquer pessoa apagava o de qualquer um).
-
-## Se algum aluno legítimo for barrado
-Os limites estão em `STAT_LIMITS`, no topo do bloco `USER-KEY` do `server.ts`
-(crédito inicial 4.000, recarga 150 por hora, teto 20.000). Aumente se precisar.
-Atenção: um código promocional que dê mais de ~3.000 diamantes de uma vez pode ser recusado no salvamento seguinte.
+## Importante: pergunta simples não segura uma IA com navegador
+Para isso, ative o Cloudflare Turnstile (grátis): crie um widget em dash.cloudflare.com > Turnstile e, no AI Studio, defina os segredos `TURNSTILE_SITE_KEY` e `TURNSTILE_SECRET_KEY`. O app passa a usar o Turnstile sozinho, sem mudar código.
 
 ## Testado
-49 testes do servidor (login admin, chaves, fraudes de moedas/preço/bônus, sequestro por nome, sinais, rate limit)
-e 9 do fluxo app↔servidor (incluindo trocar de aparelho). Rodei o `server.ts` real com um Express simulado;
-**não** compilei o projeto completo (o npm está bloqueado no meu ambiente). Rode `npm run lint` se puder, ou envie o erro do console do AI Studio.
-
-## Ainda aberto
-- Amigos e desafios (`/api/friends/*`, `/api/challenges/*`) ainda não exigem chave.
-- Contas novas podem começar com até 20.000 diamantes / 50.000 XP; e dentro do crédito é possível ganhar além do real.
-  A solução definitiva é o servidor conceder XP/moedas ao validar cada lição (Etapa B).
-- Os dados ainda ficam em `sync_data.json`; migrar para o Firebase evita que o AI Studio os apague ao republicar.
+19 testes no `server.ts` real com Express simulado (passe, uso único, nomes, tempo, armadilha, limite por IP, suspeitos, exclusão em lote e individual).
+Não compilei o front-end (npm bloqueado aqui): rode `npm run lint` ou me envie o erro do console.

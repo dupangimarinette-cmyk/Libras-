@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import { HumanCheck } from './HumanCheck';
+import { getSignupPass, looksAutomatedName } from '../../services/humanCheck';
+import { getUserKey } from '../../services/userAuth';
 import {
   User,
   Sparkles,
@@ -81,6 +84,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   );
   const [selectedAvatar, setSelectedAvatar] = useState(currentAvatar || AVATAR_OPTIONS[0].url);
   const [learnerError, setLearnerError] = useState('');
+  const [pendingLearner, setPendingLearner] = useState<string | null>(null);
   const [savedProfiles] = useState<QuickProfile[]>(() => storageService.getSavedProfiles());
 
   // Admin form state (preserved administrator account)
@@ -92,7 +96,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   // Recovery Modal State
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState('dupangimarinette@gmail.com');
-  const [recoveryCode, setRecoveryCode] = useState('LIB-ADMIN');
+  const [recoveryCode, setRecoveryCode] = useState('');
   const [recoveryNewPass, setRecoveryNewPass] = useState('');
   const [recoveryConfirmPass, setRecoveryConfirmPass] = useState('');
   const [recoveryLoading, setRecoveryLoading] = useState(false);
@@ -122,7 +126,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
 
     const normalizedName = trimmed.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    if (['marinette', 'carlos andrade real'].includes(normalizedName)) {
+    if (['carlos andrade real'].includes(normalizedName)) {
       setLearnerError('Esta conta está arquivada e não pode entrar no LibrasGo.');
       audio.playError();
       return;
@@ -132,17 +136,38 @@ export const LoginView: React.FC<LoginViewProps> = ({
       audio.playError();
       return;
     }
-    if (normalizedName === 'admin') {
+    if (normalizedName === 'admin' || normalizedName === 'marinette') {
       audio.playClick();
       setProfileType('admin');
-      setAdminUser('admin');
+      setAdminUser(trimmed);
       setAdminError('Entre com a senha da conta administradora.');
       return;
     }
 
+    if (looksAutomatedName(trimmed)) {
+      setLearnerError('Escolha outro nome ou apelido. Nomes de robôs, links ou só números/símbolos não são aceitos.');
+      audio.playError();
+      return;
+    }
+
+    // Nome novo neste aparelho = conta nova: pede a confirmação de que é uma pessoa antes de criar.
+    const knownHere =
+      savedProfiles.some((p) => p.username.trim().toLowerCase() === trimmed.toLowerCase()) ||
+      Boolean(getUserKey({ username: trimmed }));
+    if (!knownHere && !getSignupPass()) {
+      audio.playClick();
+      setPendingLearner(trimmed);
+      return;
+    }
+
+    finishLearnerLogin(trimmed);
+  };
+
+  const finishLearnerLogin = (name: string) => {
     audio.playSuccess();
-    storageService.saveProfile(trimmed, selectedAvatar, 'learner');
-    onLogin(trimmed, selectedAvatar, 'learner');
+    setPendingLearner(null);
+    storageService.saveProfile(name, selectedAvatar, 'learner');
+    onLogin(name, selectedAvatar, 'learner');
   };
 
   const handleQuickLogin = (profile: QuickProfile) => {
@@ -419,6 +444,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </div>
               </div>
 
+              {pendingLearner && (
+                <HumanCheck
+                  onVerified={() => finishLearnerLogin(pendingLearner)}
+                  onCancel={() => setPendingLearner(null)}
+                />
+              )}
+
               {/* Submit Button */}
               <button
                 type="submit"
@@ -662,13 +694,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
                   <div>
                     <label className="block text-[11px] uppercase font-extrabold text-slate-300 tracking-wider mb-1">
-                      Código de Sincronização da Administradora:
+                      Chave de recuperação (segredo ADMIN_RECOVERY_KEY):
                     </label>
                     <input
                       type="text"
                       value={recoveryCode}
                       onChange={(e) => setRecoveryCode(e.target.value)}
-                      placeholder="LIB-ADMIN"
+                      placeholder="Chave definida nos Secrets"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-bold text-xs uppercase font-mono focus:border-indigo-400 focus:outline-none"
                       required
                     />

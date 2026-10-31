@@ -39,7 +39,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/85 backdrop-blur-md border-t border-white/10 px-1.5 py-1.5">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/90 backdrop-blur-md border-t border-white/10 px-1 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom,0px))]">
       <div className="max-w-2xl mx-auto flex items-center justify-around overflow-x-auto no-scrollbar gap-0.5">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -52,7 +52,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 audio.playClick();
                 onTabChange(tab.id);
               }}
-              className={`relative flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+              className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2.5 rounded-xl transition-all cursor-pointer min-w-[42px] sm:min-w-[50px] flex-shrink-0 sm:flex-shrink ${
                 isActive
                   ? 'text-emerald-400 font-bold scale-105'
                   : 'text-slate-400 hover:text-slate-200'

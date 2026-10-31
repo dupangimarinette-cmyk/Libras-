@@ -1,7 +1,7 @@
 {
   "adminCredentials": {
     "username": "admin",
-    "passwordHash": "scrypt$f5b67280d2615e5942833c6516d21966$097644b164d1ede460319a2c264d64460298aee7fcb727732fe63e8172efc60b6eef82a7aeb25ebabcc445fbf01e89545d0f09eb8b682f8287ea1ca2622be544"
+    "passwordHash": "scrypt$245273346723002a10955b57d7b1b1e6$93abff53b869fa2c63231760de983c29bd10e3b7f60df96d972646ea0b4b9abad6fbe56fcc1bb2c091fa26bca522b9f7ee6deaa5c6cd5782a18df00602018c2a"
   },
   "mediaItems": [],
   "customModules": [],
@@ -76,6 +76,90 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "log_1793451994179_abvku",
+      "timestamp": "2026-10-31T13:06:34.179Z",
+      "action": "Novo Aluno Registrado",
+      "details": "Novo estudante cadastrado no sistema: \"Larissa Estuda Libras\" com código LIB-3825",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1793451990539_22xkz",
+      "timestamp": "2026-10-31T13:06:30.539Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"admin\" acessou o painel de gestão.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_1793451979773_0qni0",
+      "timestamp": "2026-10-31T13:06:19.773Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"admin\" acessou o painel de gestão.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_1793451915252_35jzz",
+      "timestamp": "2026-10-31T13:05:15.252Z",
+      "action": "Novo Aluno Registrado",
+      "details": "Novo estudante cadastrado no sistema: \"Camila Libras\" com código LIB-5424",
+      "adminName": "Administrador"
+    },
+    {
+      "id": "log_1793451912420_98a4m",
+      "timestamp": "2026-10-31T13:05:12.420Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"admin\" acessou o painel de gestão.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_1793451889636_o9a5c",
+      "timestamp": "2026-10-31T13:04:49.636Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"admin\" acessou o painel de gestão.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_1793451842471_yo33i",
+      "timestamp": "2026-10-31T13:04:02.471Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"admin\" acessou o painel de gestão.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_1793451825497_9iqea",
+      "timestamp": "2026-10-31T13:03:45.497Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"admin\" acessou o painel de gestão.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_1793451782553_4g6xt",
+      "timestamp": "2026-10-31T13:03:02.553Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"admin\" acessou o painel de gestão.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_1793451123390_hzst3",
+      "timestamp": "2026-10-31T12:52:03.390Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"admin\" acessou o painel de gestão.",
+      "adminName": "admin"
+    },
+    {
+      "id": "log_1793450345292_gyfqh",
+      "timestamp": "2026-10-31T12:39:05.292Z",
+      "action": "Tentativa de Login Falhou",
+      "details": "Tentativa de acesso administrativo recusada (usuário informado: \"admin\").",
+      "adminName": "Sistema"
+    },
+    {
+      "id": "log_1793450342432_b12b5",
+      "timestamp": "2026-10-31T12:39:02.432Z",
+      "action": "Login Administrativo",
+      "details": "Administradora \"admin\" acessou o painel de gestão.",
+      "adminName": "admin"
+    },
     {
       "id": "log_1793362537890_jpxmw",
       "timestamp": "2026-10-30T12:15:37.890Z",
@@ -426,6 +510,6 @@
       "repliedAt": "2026-10-22T12:40:06.283Z"
     }
   ],
-  "lastContentVersion": 1793362537890,
-  "lastUpdatedAt": "2026-10-30T12:15:37.890Z"
+  "lastContentVersion": 1793451994179,
+  "lastUpdatedAt": "2026-10-31T13:06:34.179Z"
 }

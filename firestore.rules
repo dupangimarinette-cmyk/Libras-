@@ -63,18 +63,21 @@ service cloud.firestore {
 
     // 1. User Profiles Collection
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
-      allow create: if isSignedIn() && isValidId(userId) && isValidUserProfile(incoming());
-      allow update: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin()) && isValidUserProfile(incoming());
+      allow read: if true;
+      allow create, update: if isValidId(userId) && isValidUserProfile(incoming());
       allow delete: if isAdmin();
     }
 
     // 2. Feedbacks Collection
     match /feedbacks/{feedbackId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(feedbackId) && isValidFeedback(incoming());
+      allow read: if true;
+      allow create: if isValidId(feedbackId) && isValidFeedback(incoming());
       allow update, delete: if isAdmin();
+    }
+
+    // Test connection doc
+    match /test/connection {
+      allow read: if true;
     }
 
     // 3. Community Taught Signs

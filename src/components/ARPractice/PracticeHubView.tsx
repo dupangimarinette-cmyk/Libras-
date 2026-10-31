@@ -63,7 +63,7 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
     <div className="w-full flex-1 flex flex-col">
       {/* Top Main Mode Navigator */}
       <div className="bg-slate-900/90 border-b border-slate-800 backdrop-blur-md sticky top-16 z-30 px-3 sm:px-4 py-2.5">
-        <div className="max-w-4xl mx-auto flex items-center justify-center sm:justify-start gap-2 overflow-x-auto no-scrollbar">
+        <div className="max-w-4xl mx-auto flex items-center justify-start gap-2 overflow-x-auto no-scrollbar px-1">
           
           {/* Tab 1: Expressões Faciais & RA */}
           <button

@@ -53,6 +53,9 @@ import {
 } from 'lucide-react';
 import { contentService } from '../../services/contentService';
 import { adminService, AdminUserRecord } from '../../services/adminService';
+import { SuspectAccountsPanel } from './SuspectAccountsPanel';
+import { db } from '../../services/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
 import {
   AdminSession,
   MediaItem,
@@ -227,8 +230,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [chestEdits, setChestEdits] = useState<Record<string, Partial<MysteryChest>>>({});
 
   // Subscribe to real-time shared content updates from server and auto-poll data
+  // Subscribe to real-time shared content updates, Server-Sent Events (SSE), Firestore onSnapshot, and BroadcastChannel
   useEffect(() => {
-    const unsubscribe = contentService.subscribe((content) => {
+    const unsubscribeContent = contentService.subscribe((content) => {
       setModules(content.modules);
       setSigns(content.signs);
       setChests(content.chests);
@@ -238,16 +242,68 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     loadAdminAuxData(false);
 
-    // Real-time live polling for new registrations and incoming feedbacks every 3.5 seconds
+    // 1. Server-Sent Events (SSE) for instantaneous user registration / sync push
+    let eventSource: EventSource | null = null;
+    try {
+      const sseUrl = adminSession?.token ? `/api/admin/realtime-stream?token=${encodeURIComponent(adminSession.token)}` : '/api/admin/realtime-stream';
+      eventSource = new EventSource(sseUrl);
+      eventSource.onmessage = (e) => {
+        try {
+          const parsed = JSON.parse(e.data);
+          if (parsed && (parsed.type === 'USER_UPDATED' || parsed.type === 'FEEDBACK_CREATED' || parsed.type === 'NEW_REGISTRATION')) {
+            loadAdminAuxData(true);
+          }
+        } catch {}
+      };
+    } catch (err) {
+      console.warn('SSE stream init error:', err);
+    }
+
+    // 2. BroadcastChannel for instant same-browser inter-tab sync
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('librasgo_sync_channel');
+      bc.onmessage = (ev) => {
+        if (ev.data?.type === 'USER_REGISTERED' || ev.data?.type === 'CONTENT_UPDATED') {
+          loadAdminAuxData(true);
+        }
+      };
+    } catch {}
+
+    // 3. Local window event listener
+    const handleLocalUserUpdate = () => {
+      loadAdminAuxData(true);
+    };
+    window.addEventListener('librasgo_user_registered', handleLocalUserUpdate);
+    window.addEventListener('librasgo_user_update', handleLocalUserUpdate);
+
+    // 4. Firestore Real-Time Listener on /users collection
+    let unsubscribeFirestore: (() => void) | null = null;
+    try {
+      unsubscribeFirestore = onSnapshot(collection(db, 'users'), () => {
+        loadAdminAuxData(true);
+      }, (err) => {
+        console.warn('Firestore onSnapshot listener fallback:', err);
+      });
+    } catch (err) {
+      console.warn('Firestore listener error:', err);
+    }
+
+    // 5. Live polling fallback every 3 seconds
     let intervalTimer: any = null;
     if (isLivePollingActive) {
       intervalTimer = setInterval(() => {
         loadAdminAuxData(true);
-      }, 3500);
+      }, 3000);
     }
 
     return () => {
-      unsubscribe();
+      unsubscribeContent();
+      if (eventSource) eventSource.close();
+      if (bc) bc.close();
+      window.removeEventListener('librasgo_user_registered', handleLocalUserUpdate);
+      window.removeEventListener('librasgo_user_update', handleLocalUserUpdate);
+      if (unsubscribeFirestore) unsubscribeFirestore();
       if (intervalTimer) clearInterval(intervalTimer);
     };
   }, [isLivePollingActive]);
@@ -291,17 +347,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
       setLastSyncTime(new Date().toLocaleTimeString('pt-BR'));
 
-      // Detect incoming real-time notifications
+      // Detect incoming real-time notifications with accurate new user detection
       if (silent) {
         setUsers((prevUsers) => {
           if (prevUsers.length > 0 && fetchedUsers.length > prevUsers.length) {
             const addedCount = fetchedUsers.length - prevUsers.length;
-            const latestUser = fetchedUsers[0];
+            const prevKeys = new Set(prevUsers.map((u) => u.key));
+            const newAccounts = fetchedUsers.filter((u) => !prevKeys.has(u.key) && u.role !== 'admin');
+            const latestUser = newAccounts[0] || fetchedUsers.find((u) => u.role !== 'admin') || fetchedUsers[0];
             setHasNewAlert(true);
             audio.playSuccess();
             showToast(
-              addedCount === 1
-                ? `🎉 Nova conta registrada: "${latestUser?.username}" (${latestUser?.syncCode})`
+              addedCount === 1 && latestUser
+                ? `🎉 Nova conta registrada: "${latestUser.username}" (${latestUser.syncCode})`
                 : `🎉 ${addedCount} novos alunos cadastrados no sistema!`,
               'success'
             );
@@ -1059,14 +1117,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [users]);
 
   // Filtered lists (ignora placeholders e fakes de IA para mostrar exclusivamente alunos e administradora)
-  const filteredUsers = users.filter((u) => {
-    const norm = u.username.toLowerCase();
-    if (['você (aprendiz)', 'marinette', 'carlos andrade real', 'perfil de ia', 'robot'].includes(norm) || norm.startsWith('ia_') || norm.startsWith('bot_') || norm.startsWith('fake_') || norm.startsWith('ai_')) return false;
-    return (
-      norm.includes(userSearch.toLowerCase()) ||
-      u.syncCode.toLowerCase().includes(userSearch.toLowerCase())
-    );
-  });
+  const filteredUsers = React.useMemo(() => {
+    const list = users.filter((u) => {
+      const norm = u.username.toLowerCase();
+      if (['você (aprendiz)', 'carlos andrade real', 'perfil de ia', 'robot'].includes(norm) || norm.startsWith('ia_') || norm.startsWith('bot_') || norm.startsWith('fake_') || norm.startsWith('ai_')) return false;
+      return (
+        norm.includes(userSearch.toLowerCase()) ||
+        u.syncCode.toLowerCase().includes(userSearch.toLowerCase())
+      );
+    });
+    list.sort((a, b) => {
+      if (a.role === 'admin' && b.role !== 'admin') return -1;
+      if (b.role === 'admin' && a.role !== 'admin') return 1;
+      return (b.xp || 0) - (a.xp || 0);
+    });
+    return list;
+  }, [users, userSearch]);
 
   const filteredSigns = signs.filter((s) => {
     const matchesCategory = signCategoryFilter === 'todos' || s.category === signCategoryFilter;
@@ -3373,6 +3439,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* ==================================================================== */}
       {activeTab === 'users' && (
         <div className="space-y-4">
+          <SuspectAccountsPanel onChanged={() => loadAdminAuxData(true)} />
           <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-base font-black text-white flex items-center gap-2">
@@ -3397,17 +3464,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {filteredUsers.map((u) => (
-              <div key={u.key} className="p-4 rounded-3xl bg-slate-900 border border-slate-800 space-y-3">
+            {filteredUsers.map((u) => {
+              const isAdmin = u.role === 'admin';
+              return (
+              <div
+                key={u.key}
+                className={`p-4 rounded-3xl border space-y-3 transition-all ${
+                  isAdmin
+                    ? 'bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border-indigo-500/50 shadow-xl shadow-indigo-950/40 ring-1 ring-indigo-500/30'
+                    : 'bg-slate-900 border-slate-800'
+                }`}
+              >
                 <div className="flex items-center gap-3">
-                  <img
-                    src={u.avatarUrl}
-                    alt={u.username}
-                    className="w-11 h-11 rounded-2xl object-cover border border-slate-700"
-                  />
+                  <div className="relative">
+                    <img
+                      src={u.avatarUrl}
+                      alt={u.username}
+                      className={`w-11 h-11 rounded-2xl object-cover border ${
+                        isAdmin ? 'border-indigo-400 ring-2 ring-indigo-500/40' : 'border-slate-700'
+                      }`}
+                    />
+                    {isAdmin && (
+                      <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gradient-to-tr from-amber-400 to-yellow-300 text-slate-950 flex items-center justify-center font-black text-[10px] shadow-sm">
+                        ⭐
+                      </span>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-black text-white truncate">{u.username}</h4>
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <h4 className="text-sm font-black text-white truncate">{u.username}</h4>
+                        {isAdmin && (
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/50 flex items-center gap-1">
+                            <Shield className="w-2.5 h-2.5 text-cyan-300" /> Administradora
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                         {u.syncCode}
                       </span>
@@ -3469,7 +3561,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
         </div>
       )}

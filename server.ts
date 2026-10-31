@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -264,6 +265,115 @@ function getCatalogItem(category: string, itemId: string): { cost: number; name:
 }
 // === USER-KEY END ===
 
+// === ANTI-BOT BEGIN ===
+// -------------------------------------------------------------
+// BLOQUEIO DE CONTAS FALSAS (ROBÔS / IA) NO CADASTRO
+// Conta nova só nasce com um "passe" de verificação humana, de uso único.
+// Verificação: Cloudflare Turnstile (se TURNSTILE_SECRET_KEY e TURNSTILE_SITE_KEY existirem)
+// ou, sem isso, uma pergunta simples + armadilha invisível + tempo mínimo + limite por IP.
+// -------------------------------------------------------------
+const SIGNUP_SECRET = process.env.SIGNUP_SECRET || crypto.randomBytes(32).toString('hex');
+const CHALLENGE_TTL_MS = 10 * 60 * 1000;
+const PASS_TTL_MS = 30 * 60 * 1000;
+const MIN_FILL_MS = 2500;
+const SIGNUP_LIMITS = { newAccountsPerIpPerHour: 8, failedChecksPer10Min: 12, challengesPer10Min: 60 };
+const usedSignupNonces = new Map<string, number>();
+
+const challengeLimiter = makeLimiter(SIGNUP_LIMITS.challengesPer10Min, 10 * 60 * 1000);
+const failedCheckLimiter = makeLimiter(SIGNUP_LIMITS.failedChecksPer10Min, 10 * 60 * 1000);
+const newAccountLimiter = makeLimiter(SIGNUP_LIMITS.newAccountsPerIpPerHour, 60 * 60 * 1000);
+const lastSignupAlert = new Map<string, number>();
+
+function b64u(s: string): string {
+  return Buffer.from(s, 'utf-8').toString('base64url');
+}
+function signToken(payload: Record<string, any>): string {
+  const body = b64u(JSON.stringify(payload));
+  const mac = crypto.createHmac('sha256', SIGNUP_SECRET).update(body).digest('base64url');
+  return `${body}.${mac}`;
+}
+function readToken(token: unknown): Record<string, any> | null {
+  if (typeof token !== 'string' || token.length > 600) return null;
+  const [body, mac] = token.split('.');
+  if (!body || !mac) return null;
+  const expected = crypto.createHmac('sha256', SIGNUP_SECRET).update(body).digest('base64url');
+  const a = Buffer.from(mac);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const p = JSON.parse(Buffer.from(body, 'base64url').toString('utf-8'));
+    return p && typeof p === 'object' && Number(p.exp) > Date.now() ? p : null;
+  } catch {
+    return null;
+  }
+}
+function pruneNonces() {
+  const now = Date.now();
+  for (const [n, exp] of usedSignupNonces) if (exp < now) usedSignupNonces.delete(n);
+}
+function ipHashOf(req: Request): string {
+  return crypto.createHash('sha256').update(`${SIGNUP_SECRET}|${req.ip || 'unknown'}`).digest('hex').slice(0, 16);
+}
+function alertOnce(key: string, action: string, details: string) {
+  const last = lastSignupAlert.get(key) || 0;
+  if (Date.now() - last > 30 * 60 * 1000) {
+    lastSignupAlert.set(key, Date.now());
+    logAdminAction(action, details, 'Sistema');
+  }
+}
+
+/** Nomes que parecem de robô, IA, spam ou link. Usado no cadastro e na lista de suspeitas (não esconde ninguém). */
+function looksAutomatedName(username: unknown): boolean {
+  const n = normalizeString(String(username || ''));
+  if (!n) return false;
+  if (/https?:|www\.|\.(com|net|org|br|io|xyz|ru)\b|@/.test(n)) return true;
+  if (/(^|[^a-z])(bot|robo|chatgpt|gpt|gemini|claude|copilot|assistant|assistente|agente|crawler|scraper)([^a-z]|$)/.test(n)) return true;
+  if (/^(user|usuario|aluno|test|teste|player|guest|visitante)[\s_-]?\d{3,}$/.test(n)) return true;
+  if (/^[^a-z]+$/.test(n) && n.length > 0) return true; // só símbolos/números
+  return false;
+}
+
+async function checkTurnstile(token: string, req: Request): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret || !token || token.length > 2100) return false;
+  try {
+    const body = new URLSearchParams({ secret, response: token, remoteip: req.ip || '' });
+    const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body });
+    const j: any = await r.json();
+    return !!j?.success;
+  } catch {
+    return false;
+  }
+}
+
+type SignupGate = { ok: true; consume: () => void } | { ok: false; status: number; code: string; message: string };
+
+/** Chamado quando /api/sync/save vai CRIAR uma conta. */
+function checkSignupGate(req: Request, username: unknown): SignupGate {
+  const ip = req.ip || 'unknown';
+  if (looksAutomatedName(username)) {
+    alertOnce(`name:${ip}`, 'Cadastro Bloqueado', `Nome com cara de robô/IA recusado: "${String(username).slice(0, 40)}".`);
+    return { ok: false, status: 400, code: 'NAME_BLOCKED', message: 'Escolha outro nome ou apelido. Nomes de robôs, links ou só números/símbolos não são aceitos.' };
+  }
+  if (newAccountLimiter.limited(ip)) {
+    alertOnce(`rate:${ip}`, 'Cadastro Bloqueado', `Muitas contas novas seguidas vindas da mesma rede (limite ${SIGNUP_LIMITS.newAccountsPerIpPerHour}/hora). Último nome: "${String(username).slice(0, 40)}".`);
+    return { ok: false, status: 429, code: 'SIGNUP_RATE', message: 'Muitos cadastros desta rede em pouco tempo. Tente novamente mais tarde.' };
+  }
+  const pass = readToken(req.headers['x-signup-pass']);
+  pruneNonces();
+  if (!pass || pass.t !== 'pass' || typeof pass.n !== 'string' || usedSignupNonces.has(pass.n)) {
+    return { ok: false, status: 428, code: 'SIGNUP_CHECK_REQUIRED', message: 'Confirme que você é uma pessoa para criar a conta.' };
+  }
+  return {
+    ok: true,
+    consume: () => {
+      usedSignupNonces.set(pass.n, pass.exp);
+      newAccountLimiter.hit(ip);
+    },
+  };
+}
+// === ANTI-BOT END ===
+
 // -------------------------------------------------------------
 // ADMIN STATE & SHARED APPLICATION CONTENT PERSISTENCE
 // -------------------------------------------------------------
@@ -498,6 +608,7 @@ function ensureAdminCredentials() {
       console.log('[ADMIN] Senha do administrador definida a partir de ADMIN_PASSWORD.');
       return;
     } else {
+      console.log('[ADMIN] Senha do administrador definida a partir de ADMIN_PASSWORD.');
       return;
     }
   }
@@ -536,7 +647,10 @@ function pruneAdminSessions() {
 
 function getBearerToken(req: Request): string {
   const header = String(req.headers['authorization'] || '');
-  return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  if (header.startsWith('Bearer ')) return header.slice(7).trim();
+  const queryToken = String(req.query.token || '');
+  if (queryToken) return queryToken.trim();
+  return '';
 }
 
 function requireAdmin(req: Request, res: Response, next: () => void) {
@@ -686,12 +800,83 @@ app.get('/api/content/version', (_req: Request, res: Response) => {
 // -------------------------------------------------------------
 // INDIVIDUAL USER PROGRESS SYNC
 // -------------------------------------------------------------
+// === ANTI-BOT ROUTES BEGIN ===
+app.get('/api/signup/challenge', (req: Request, res: Response) => {
+  const ip = req.ip || 'unknown';
+  if (challengeLimiter.limited(ip)) {
+    return res.status(429).json({ success: false, message: 'Muitas tentativas. Aguarde alguns minutos.' });
+  }
+  challengeLimiter.hit(ip);
+  const now = Date.now();
+  const siteKey = process.env.TURNSTILE_SITE_KEY;
+  if (siteKey && process.env.TURNSTILE_SECRET_KEY && req.query.mode !== 'math') {
+    return res.json({ success: true, mode: 'turnstile', siteKey, token: signToken({ t: 'ch', ts: now, exp: now + CHALLENGE_TTL_MS, n: crypto.randomBytes(8).toString('hex') }) });
+  }
+  const a = crypto.randomInt(3, 15);
+  const b = crypto.randomInt(2, 10);
+  const op = crypto.randomInt(0, 2) === 0 ? '+' : '-';
+  const answer = op === '+' ? a + b : a - b;
+  const answerHash = crypto.createHmac('sha256', SIGNUP_SECRET).update(`ans|${answer}`).digest('hex').slice(0, 24);
+  return res.json({
+    success: true,
+    mode: 'math',
+    question: `Quanto é ${a} ${op === '+' ? 'mais' : 'menos'} ${b}?`,
+    token: signToken({ t: 'ch', ts: now, exp: now + CHALLENGE_TTL_MS, n: crypto.randomBytes(8).toString('hex'), h: answerHash }),
+  });
+});
+
+app.post('/api/signup/verify', async (req: Request, res: Response) => {
+  const ip = req.ip || 'unknown';
+  const fail = (status: number, message: string) => {
+    failedCheckLimiter.hit(ip);
+    return res.status(status).json({ success: false, message });
+  };
+  if (failedCheckLimiter.limited(ip)) {
+    alertOnce(`verify:${ip}`, 'Cadastro Bloqueado', 'Muitas verificações humanas falhas seguidas vindas da mesma rede (possível robô).');
+    return res.status(429).json({ success: false, message: 'Muitas tentativas erradas. Aguarde alguns minutos.' });
+  }
+  const { token, answer, turnstileToken, hp } = req.body || {};
+  const ch = readToken(token);
+  if (!ch || ch.t !== 'ch') return fail(400, 'A verificação expirou. Tente de novo.');
+  pruneNonces();
+  if (usedSignupNonces.has(ch.n)) return fail(400, 'Esta verificação já foi usada. Tente de novo.');
+  if (typeof hp === 'string' && hp.trim() !== '') return fail(400, 'Não foi possível confirmar. Tente de novo.');
+  if (Date.now() - Number(ch.ts) < MIN_FILL_MS) return fail(400, 'Calma! Leia a pergunta com atenção e tente de novo.');
+
+  if (ch.h) {
+    const given = crypto.createHmac('sha256', SIGNUP_SECRET).update(`ans|${String(answer ?? '').trim()}`).digest('hex').slice(0, 24);
+    if (given !== ch.h) return fail(400, 'Resposta incorreta. Tente de novo.');
+  } else if (!(await checkTurnstile(String(turnstileToken || ''), req))) {
+    return fail(400, 'Não foi possível confirmar. Tente de novo.');
+  }
+
+  usedSignupNonces.set(ch.n, ch.exp);
+  const now = Date.now();
+  const passNonce = crypto.randomBytes(12).toString('hex');
+  res.json({ success: true, pass: signToken({ t: 'pass', n: passNonce, exp: now + PASS_TTL_MS }) });
+});
+// === ANTI-BOT ROUTES END ===
+
 app.get('/api/sync/generate-code', (_req: Request, res: Response) => {
   const db = readSyncDb();
   let code = randomSyncCode();
   while (db[code]) code = randomSyncCode();
   res.json({ success: true, syncCode: code });
 });
+
+// Real-time Server-Sent Events (SSE) connections for instant Admin updates
+const adminSseClients = new Set<Response>();
+
+function broadcastAdminUpdate(data: any) {
+  const payload = `data: ${JSON.stringify(data)}\n\n`;
+  for (const client of adminSseClients) {
+    try {
+      client.write(payload);
+    } catch {
+      adminSseClients.delete(client);
+    }
+  }
+}
 
 app.post('/api/sync/save', (req: Request, res: Response) => {
   const { syncCode, username, userStats, missions } = req.body || {};
@@ -736,6 +921,13 @@ app.post('/api/sync/save', (req: Request, res: Response) => {
 
   const nowIso = new Date().toISOString();
   const isNewUser = (!codeKey || !db[codeKey]) && (!userKey || !db[userKey]);
+
+  // Conta nova exige verificação humana (exceto o perfil padrão oculto, que nunca aparece para ninguém).
+  const gate: SignupGate | null =
+    isNewUser && String(username || '').trim() !== 'Você (Aprendiz)' ? checkSignupGate(req, username) : null;
+  if (gate && !gate.ok) {
+    return res.status(gate.status).json({ success: false, code: gate.code, message: gate.message });
+  }
   const createdAt = existingRecord?.createdAt || existingRecord?.userStats?.createdAt || (isNewUser ? nowIso : existingRecord?.updatedAt || nowIso);
 
   const mergedStats = {
@@ -755,6 +947,8 @@ app.post('/api/sync/save', (req: Request, res: Response) => {
     gainCredit: check.credit,
     streakBumpAt: check.streakBumpAt || existingRecord?.streakBumpAt,
     authKeyHashes: existingRecord?.authKeyHashes || [],
+    signupIpHash: isNewUser ? ipHashOf(req) : existingRecord?.signupIpHash,
+    signupAt: isNewUser ? nowIso : existingRecord?.signupAt,
   };
 
   if (codeKey) {
@@ -776,10 +970,19 @@ app.post('/api/sync/save', (req: Request, res: Response) => {
   const issuedKey = finalizeUserKey(db, savedKeys, db[savedKeys[0]], auth.hashes);
 
   writeSyncDb(db);
+  if (gate && gate.ok) gate.consume();
 
   if (isNewUser && username && username !== 'Você (Aprendiz)') {
     logAdminAction('Novo Aluno Registrado', `Novo estudante cadastrado no sistema: "${username}" com código ${codeKey}`);
   }
+
+  broadcastAdminUpdate({
+    type: 'USER_UPDATED',
+    isNewUser,
+    username,
+    syncCode: codeKey,
+    timestamp: nowIso,
+  });
 
   res.json({ success: true, updatedAt: payload.updatedAt, createdAt: payload.createdAt, syncCode: payload.syncCode, authKey: issuedKey });
 });
@@ -1613,19 +1816,29 @@ app.post('/api/admin/auth/login', (req: Request, res: Response) => {
 });
 
 app.post('/api/admin/auth/recover-password', (req: Request, res: Response) => {
-  const { authorizedEmail, syncCode, newPassword } = req.body || {};
-  const cleanEmail = (authorizedEmail || '').toLowerCase().trim();
-  const cleanCode = (syncCode || '').toUpperCase().trim();
-  const cleanPass = (newPassword || '').trim();
+  const ip = req.ip || 'unknown';
+  if (loginRateLimited(ip)) {
+    return res.status(429).json({ success: false, message: 'Muitas tentativas. Aguarde 5 minutos (ou reinicie o app) e tente novamente.' });
+  }
+  const { syncCode, newPassword } = req.body || {};
+  const given = String(syncCode || '').trim();
+  const cleanPass = String(newPassword || '').trim();
 
-  const isEmailAuthorized = cleanEmail === 'dupangimarinette@gmail.com';
-  const isCodeAuthorized = cleanCode === 'LIB-ADMIN';
-
-  if (!isEmailAuthorized && !isCodeAuthorized) {
+  // O e-mail e o código LIB-ADMIN apareciam na própria tela, então qualquer pessoa podia tomar o painel.
+  // Agora a recuperação exige uma chave secreta, definida só por você nos Secrets do AI Studio.
+  const recoveryKey = (process.env.ADMIN_RECOVERY_KEY || '').trim();
+  if (recoveryKey.length < 8) {
     return res.status(403).json({
       success: false,
-      message: 'Recuperação não autorizada. Apenas o e-mail oficial (dupangimarinette@gmail.com) ou código da administradora pode redefinir o acesso.',
+      message: 'Recuperação desativada por segurança. Defina o segredo ADMIN_PASSWORD (ou ADMIN_RECOVERY_KEY) nas configurações do AI Studio e reinicie o app.',
     });
+  }
+  const a = Buffer.from(given);
+  const b = Buffer.from(recoveryKey);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    registerFailedLogin(ip);
+    logAdminAction('Recuperação de Senha Recusada', 'Chave de recuperação incorreta.', 'Sistema');
+    return res.status(403).json({ success: false, message: 'Chave de recuperação incorreta.' });
   }
 
   if (cleanPass.length < MIN_ADMIN_PASSWORD_LENGTH) {
@@ -1643,8 +1856,8 @@ app.post('/api/admin/auth/recover-password', (req: Request, res: Response) => {
   writeAdminState(adminState);
 
   // Atualiza somente a conta administrativa preservada; a conta arquivada Marinette não é tocada.
-  const adminKeys = ['USER_admin', 'LIB-ADMIN'];
-  for (const key of adminKeys) {
+  const db = readSyncDb();
+  for (const key of ['USER_admin', 'LIB-ADMIN']) {
     if (db[key]) {
       db[key].role = 'admin';
       if (db[key].userStats) db[key].userStats.role = 'admin';
@@ -1652,11 +1865,7 @@ app.post('/api/admin/auth/recover-password', (req: Request, res: Response) => {
   }
   writeSyncDb(db);
 
-  logAdminAction(
-    'Senha de Administradora Redefinida',
-    `Acesso da conta admin redefinido com sucesso via credencial autorizada (${cleanEmail || cleanCode}).`,
-    'admin'
-  );
+  logAdminAction('Senha de Administradora Redefinida', 'Acesso da conta admin redefinido com a chave de recuperação.', 'admin');
 
   return res.json({
     success: true,
@@ -2253,10 +2462,10 @@ function normalizeString(str: string): string {
 
 // Contas arquivadas a pedido da proprietária. Os dados permanecem no JSON/backup,
 // mas essas identidades não podem autenticar, sincronizar nem aparecer nas listas.
-const ARCHIVED_BLOCKED_ACCOUNT_NAMES = new Set(['marinette', 'carlos andrade real']);
-const ARCHIVED_BLOCKED_SYNC_CODES = new Set(['LIB-TEST1', 'LIB-8899']);
+const ARCHIVED_BLOCKED_ACCOUNT_NAMES = new Set(['carlos andrade real']);
+const ARCHIVED_BLOCKED_SYNC_CODES = new Set(['LIB-8899']);
 const AUTOMATED_ACCOUNT_NAMES = new Set(['perfil de ia', 'perfil ia', 'usuario ia', 'usuário ia', 'robot', 'robô']);
-const CONFIRMED_TEST_ACCOUNT_NAMES = new Set(['tester', 'voce (aprendiz)']);
+const CONFIRMED_TEST_ACCOUNT_NAMES = new Set(['voce (aprendiz)']);
 
 function isArchivedBlockedAccount(username: unknown): boolean {
   return ARCHIVED_BLOCKED_ACCOUNT_NAMES.has(normalizeString(String(username || '')));
@@ -2801,28 +3010,94 @@ app.post('/api/admin/users/adjust', (req: Request, res: Response) => {
   res.json({ success: true, message: `Ajustes aplicados ao usuário ${username} com sucesso!` });
 });
 
-app.delete('/api/admin/users/:key', (req: Request, res: Response) => {
-  const targetKey = decodeURIComponent(req.params.key).trim();
-  const targetUsername = (req.query.username as string || '').toLowerCase().trim();
+// === ANTI-BOT ADMIN BEGIN ===
+function deleteAccounts(targetKey: string, targetUsername: string): number {
   const db = readSyncDb();
   let deletedCount = 0;
-
   for (const [k, val] of Object.entries(db)) {
     const valUsername = (val?.username || val?.userStats?.username || '').toLowerCase().trim();
     const valSyncCode = (val?.syncCode || val?.userStats?.syncCode || '').toUpperCase().trim();
-
     const matchesKey = k === targetKey || k.toLowerCase() === targetKey.toLowerCase();
     const matchesUsername = targetUsername && valUsername === targetUsername;
     const matchesUserKey = targetKey && valUsername === targetKey.toLowerCase();
     const matchesSyncCode = targetKey && valSyncCode === targetKey.toUpperCase();
-
     if (matchesKey || matchesUsername || matchesUserKey || matchesSyncCode) {
       delete db[k];
       deletedCount++;
     }
   }
-
   writeSyncDb(db);
+  return deletedCount;
+}
+
+/** Contas com sinais de serem falsas. Inclui as que a lista normal de alunos esconde (nomes de robô). */
+app.get('/api/admin/suspects', (_req: Request, res: Response) => {
+  const db = readSyncDb();
+  const byName = new Map<string, any>();
+  for (const [key, val] of Object.entries(db)) {
+    if (!val?.userStats) continue;
+    const uname = String(val.username || val.userStats.username || key.replace(/^USER_/, '')).trim();
+    const norm = normalizeString(uname);
+    if (!norm || CONFIRMED_TEST_ACCOUNT_NAMES.has(norm)) continue;
+    const prev = byName.get(norm);
+    if (!prev || (Date.parse(val.updatedAt || '') || 0) > (Date.parse(prev.val.updatedAt || '') || 0)) byName.set(norm, { key, uname, val });
+  }
+  const ipCount = new Map<string, number>();
+  for (const { val } of byName.values()) {
+    if (val.signupIpHash) ipCount.set(val.signupIpHash, (ipCount.get(val.signupIpHash) || 0) + 1);
+  }
+  const now = Date.now();
+  const suspects: any[] = [];
+  for (const { key, uname, val } of byName.values()) {
+    const flags: { id: string; label: string; strong: boolean }[] = [];
+    if (isAutomatedAccountName(uname) || looksAutomatedName(uname)) {
+      flags.push({ id: 'name', label: 'Nome com cara de robô/IA', strong: true });
+    }
+    const sameIp = val.signupIpHash ? ipCount.get(val.signupIpHash) || 0 : 0;
+    if (sameIp >= 4) flags.push({ id: 'ip', label: `${sameIp} contas criadas da mesma rede`, strong: false });
+    const st = val.userStats;
+    const created = Date.parse(val.createdAt || st.createdAt || '') || 0;
+    const idle = (Number(st.xp) || 0) === 0 && (st.completedLessonIds?.length || 0) === 0 && (Number(st.perfectSignsCount) || 0) === 0;
+    if (idle && created && now - created > 7 * 86400000) flags.push({ id: 'idle', label: 'Sem nenhuma atividade há mais de 7 dias', strong: false });
+    if (flags.length === 0) continue;
+    suspects.push({
+      key,
+      username: uname,
+      syncCode: val.syncCode || st.syncCode || '',
+      createdAt: val.createdAt || st.createdAt || null,
+      xp: Number(st.xp) || 0,
+      lessons: st.completedLessonIds?.length || 0,
+      flags,
+      score: flags.reduce((s, f) => s + (f.strong ? 3 : 1), 0),
+    });
+  }
+  suspects.sort((a, b) => b.score - a.score);
+  res.json({ success: true, suspects });
+});
+
+app.post('/api/admin/users/purge', (req: Request, res: Response) => {
+  const items = Array.isArray(req.body?.accounts) ? req.body.accounts.slice(0, 200) : [];
+  if (items.length === 0) return res.status(400).json({ success: false, message: 'Nenhuma conta selecionada.' });
+  let deleted = 0;
+  const names: string[] = [];
+  for (const it of items) {
+    const key = String(it?.key || '').trim();
+    const username = String(it?.username || '').toLowerCase().trim();
+    if (!key && !username) continue;
+    if (deleteAccounts(key, username) > 0) {
+      deleted++;
+      names.push(String(it?.username || key).slice(0, 30));
+    }
+  }
+  logAdminAction('Contas Suspeitas Excluídas', `${deleted} conta(s) removida(s) em lote: ${names.slice(0, 20).join(', ')}${names.length > 20 ? '…' : ''}.`);
+  res.json({ success: true, deleted, message: `${deleted} conta(s) excluída(s).` });
+});
+// === ANTI-BOT ADMIN END ===
+
+app.delete('/api/admin/users/:key', (req: Request, res: Response) => {
+  const targetKey = decodeURIComponent(req.params.key).trim();
+  const targetUsername = (req.query.username as string || '').toLowerCase().trim();
+  const deletedCount = deleteAccounts(targetKey, targetUsername);
 
   logAdminAction(
     'Conta de Aluno Excluída',
@@ -3055,6 +3330,18 @@ app.delete('/api/admin/users/:username/challenges/:challengeId', (req: Request, 
   res.json({
     success: true,
     message: `Desafio excluído com sucesso do perfil do aluno.`,
+  });
+});
+
+app.get('/api/admin/realtime-stream', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+  adminSseClients.add(res);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', timestamp: new Date().toISOString() })}\n\n`);
+  _req.on('close', () => {
+    adminSseClients.delete(res);
   });
 });
 

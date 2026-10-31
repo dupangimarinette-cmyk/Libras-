@@ -2,7 +2,10 @@ import { UserStats, DailyMission, LeaderboardEntry, FriendUser, WeeklyChallenge,
 import { INITIAL_DAILY_MISSIONS } from '../data/missionsData';
 import { INITIAL_LEADERBOARD } from '../data/mockLeaderboard';
 import { userFetch } from './userAuth';
+import { getSignupPass, clearSignupPass, HUMAN_CHECK_EVENT, SIGNUP_BLOCKED_EVENT } from './humanCheck';
 import { generateSyncCode } from '../utils/syncCode';
+import { db } from './firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 const STORAGE_KEY_STATS = 'librasgo_user_stats';
 const STORAGE_KEY_MISSIONS = 'librasgo_missions';
@@ -112,9 +115,10 @@ export const storageService = {
     const code = currentStats.syncCode || generateSyncCode();
 
     try {
+      const pass = getSignupPass();
       const res = await userFetch('/api/sync/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: pass ? { 'Content-Type': 'application/json', 'X-Signup-Pass': pass } : { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           syncCode: code,
           username: currentStats.username,
@@ -123,8 +127,18 @@ export const storageService = {
         }),
       }, { username: currentStats.username, syncCode: code });
 
+      if (!res.ok) {
+        const err = await res.clone().json().catch(() => ({}));
+        if (err?.code === 'SIGNUP_CHECK_REQUIRED') {
+          clearSignupPass();
+          window.dispatchEvent(new CustomEvent(HUMAN_CHECK_EVENT));
+        } else if (err?.code === 'NAME_BLOCKED' || err?.code === 'SIGNUP_RATE') {
+          window.dispatchEvent(new CustomEvent(SIGNUP_BLOCKED_EVENT, { detail: err.message }));
+        }
+      }
       if (res.ok) {
         const data = await res.json();
+        clearSignupPass();
         const updated = {
           ...currentStats,
           syncCode: code,
@@ -133,6 +147,37 @@ export const storageService = {
         try {
           localStorage.setItem(STORAGE_KEY_STATS, JSON.stringify(updated));
         } catch {}
+
+        // Sync with Firestore for cross-client cloud persistence
+        try {
+          const userDocRef = doc(db, 'users', code);
+          setDoc(userDocRef, {
+            username: currentStats.username,
+            syncCode: code,
+            xp: Number(currentStats.xp) || 0,
+            level: Number(currentStats.level) || 1,
+            gems: Number(currentStats.gems) || 0,
+            hearts: currentStats.hearts ?? 5,
+            streak: Number(currentStats.streak) || 0,
+            avatarUrl: currentStats.avatarUrl || '',
+            bio: currentStats.bio || '',
+            lastActiveDate: currentStats.lastActiveDate || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, { merge: true }).catch((e) => console.warn('Firestore user doc sync:', e));
+        } catch (err) {
+          console.warn('Firestore user sync init error:', err);
+        }
+
+        // Notify other tabs and Admin Panel in real time
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('librasgo_user_registered', { detail: updated }));
+          try {
+            const bc = new BroadcastChannel('librasgo_sync_channel');
+            bc.postMessage({ type: 'USER_REGISTERED', user: updated });
+            bc.close();
+          } catch {}
+        }
+
         return { success: true, syncCode: code };
       }
     } catch (err) {
@@ -378,6 +423,15 @@ export const storageService = {
       localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(profiles.slice(0, 8)));
     } catch {
       // ignore
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('librasgo_user_registered', { detail: newEntry }));
+      try {
+        const bc = new BroadcastChannel('librasgo_sync_channel');
+        bc.postMessage({ type: 'USER_REGISTERED', user: newEntry });
+        bc.close();
+      } catch {}
     }
   },
 

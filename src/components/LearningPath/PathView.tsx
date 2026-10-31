@@ -74,11 +74,11 @@ export const PathView: React.FC<PathViewProps> = ({
       case 0:
         return 'translate-x-0';
       case 1:
-        return '-translate-x-12 sm:-translate-x-16';
+        return '-translate-x-8 sm:-translate-x-14 md:-translate-x-16';
       case 2:
         return 'translate-x-0';
       case 3:
-        return 'translate-x-12 sm:translate-x-16';
+        return 'translate-x-8 sm:translate-x-14 md:translate-x-16';
       default:
         return 'translate-x-0';
     }

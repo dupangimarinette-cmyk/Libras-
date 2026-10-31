@@ -1,0 +1,3350 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Shield,
+  Users,
+  BookOpen,
+  Film,
+  Gift,
+  KeyRound,
+  Sparkles,
+  Plus,
+  Trash2,
+  Edit2,
+  Check,
+  X,
+  Search,
+  ExternalLink,
+  RefreshCw,
+  LogOut,
+  GraduationCap,
+  Heart,
+  Flame,
+  Award,
+  Video,
+  Image as ImageIcon,
+  Tag,
+  AlertCircle,
+  Megaphone,
+  Save,
+  CheckCircle2,
+  Lock,
+  Layers,
+  BarChart3,
+  Sliders,
+  DollarSign,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  Play,
+  Cloud,
+  ClipboardPaste,
+  MessageSquare,
+  Bell,
+  Radio,
+  Copy,
+  CheckCheck,
+  Activity,
+  Info,
+  AlertTriangle,
+  UserCheck,
+} from 'lucide-react';
+import { contentService } from '../../services/contentService';
+import { adminService, AdminUserRecord } from '../../services/adminService';
+import {
+  AdminSession,
+  MediaItem,
+  PromoCode,
+  SystemAnnouncement,
+  MysteryChest,
+  LibrasSign,
+  LearningModule,
+  Lesson,
+  UserFeedback,
+  FeedbackStatus,
+} from '../../types/libras';
+import { audio } from '../../services/audioService';
+
+interface AdminDashboardProps {
+  adminSession: AdminSession;
+  onLogoutAdmin: () => void;
+  onSwitchToLearner: () => void;
+}
+
+type AdminTab = 'users' | 'activities' | 'signs' | 'media' | 'rewards' | 'announcements' | 'security' | 'feedbacks';
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  adminSession,
+  onLogoutAdmin,
+  onSwitchToLearner,
+}) => {
+  const [activeTab, setActiveTab] = useState<AdminTab>('activities');
+  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Synced Shared Content State
+  const [modules, setModules] = useState<LearningModule[]>(() => contentService.getContent().modules);
+  const [signs, setSigns] = useState<LibrasSign[]>(() => contentService.getContent().signs);
+  const [chests, setChests] = useState<MysteryChest[]>(() => contentService.getContent().chests);
+  const [mediaList, setMediaList] = useState<MediaItem[]>(() => contentService.getContent().media);
+  const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>(() => contentService.getContent().announcements);
+
+  // Users State
+  const [users, setUsers] = useState<AdminUserRecord[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+
+  // Promo Codes State
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [isAddingPromo, setIsAddingPromo] = useState(false);
+  const [newPromoCode, setNewPromoCode] = useState('');
+  const [newPromoGems, setNewPromoGems] = useState(250);
+  const [newPromoXp, setNewPromoXp] = useState(150);
+  const [newPromoHearts, setNewPromoHearts] = useState(5);
+  const [newPromoChests, setNewPromoChests] = useState(1);
+  const [newPromoUses, setNewPromoUses] = useState(500);
+  const [newPromoExpiry, setNewPromoExpiry] = useState('');
+  const [newPromoDesc, setNewPromoDesc] = useState('');
+  const [promoSearch, setPromoSearch] = useState('');
+  const [promoFilter, setPromoFilter] = useState<'all' | 'active' | 'inactive'>('all');
+
+  // Security & Logs State
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [currentPass, setCurrentPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+
+  // Feedbacks State
+  const [feedbacksList, setFeedbacksList] = useState<UserFeedback[]>([]);
+  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState<'todos' | FeedbackStatus>('todos');
+  const [feedbackCategoryFilter, setFeedbackCategoryFilter] = useState<'todos' | string>('todos');
+  const [replyingFeedbackId, setReplyingFeedbackId] = useState<string | null>(null);
+  const [adminReplyText, setAdminReplyText] = useState('');
+  const [adminReplyStatus, setAdminReplyStatus] = useState<FeedbackStatus>('resolvido');
+
+  // Custom In-App Confirmation Modal (100% iframe compatible, replaces window.confirm)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    isDestructive?: boolean;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
+
+  // User detail modal state
+  const [selectedUserDetail, setSelectedUserDetail] = useState<AdminUserRecord | null>(null);
+
+  // Real-time Live Polling & Notification Center
+  const [isLivePollingActive, setIsLivePollingActive] = useState<boolean>(true);
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState<boolean>(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [hasNewAlert, setHasNewAlert] = useState<boolean>(false);
+
+  // --- MODULES & ACTIVITIES MODALS / FORM STATES ---
+  const [expandedModuleId, setExpandedModuleId] = useState<string | null>(null);
+  const [isCreatingModule, setIsCreatingModule] = useState(false);
+  const [newModTitle, setNewModTitle] = useState('');
+  const [newModSubtitle, setNewModSubtitle] = useState('');
+  const [newModDesc, setNewModDesc] = useState('');
+  const [newModTheme, setNewModTheme] = useState('from-indigo-600 to-purple-600');
+  const [newModLevel, setNewModLevel] = useState(16);
+
+  const [editingModule, setEditingModule] = useState<LearningModule | null>(null);
+
+  // Lesson Modal State
+  const [isAddingLessonModuleId, setIsAddingLessonModuleId] = useState<string | null>(null);
+  const [newLessonTitle, setNewLessonTitle] = useState('');
+  const [newLessonDesc, setNewLessonDesc] = useState('');
+  const [newLessonXp, setNewLessonXp] = useState(35);
+  const [newLessonGems, setNewLessonGems] = useState(15);
+  const [newLessonSignId, setNewLessonSignId] = useState('letra_a');
+
+  const [editingLesson, setEditingLesson] = useState<{ moduleId: string; lesson: Lesson } | null>(null);
+
+  // --- SIGNS (LIBRASDEX) MODALS / FORM STATES ---
+  const [signSearch, setSignSearch] = useState('');
+  const [signCategoryFilter, setSignCategoryFilter] = useState('todos');
+  const [isAddingSign, setIsAddingSign] = useState(false);
+  const [newSignName, setNewSignName] = useState('');
+  const [newSignCategory, setNewSignCategory] = useState<any>('saudacoes');
+  const [newSignDifficulty, setNewSignDifficulty] = useState<any>('iniciante');
+  const [newSignMeaning, setNewSignMeaning] = useState('');
+  const [newSignSentence, setNewSignSentence] = useState('');
+  const [newSignCm, setNewSignCm] = useState('');
+  const [newSignPa, setNewSignPa] = useState('');
+  const [newSignM, setNewSignM] = useState('');
+  const [newSignO, setNewSignO] = useState('');
+  const [newSignEf, setNewSignEf] = useState('');
+  const [newSignVideo, setNewSignVideo] = useState('');
+  const [newSignImage, setNewSignImage] = useState('');
+  const [newSignTips, setNewSignTips] = useState('');
+
+  const [editingSign, setEditingSign] = useState<LibrasSign | null>(null);
+
+  // --- MEDIA MODAL / FORM STATES ---
+  const [isAddingMedia, setIsAddingMedia] = useState(false);
+  const [newMediaTitle, setNewMediaTitle] = useState('');
+  const [newMediaCategory, setNewMediaCategory] = useState<'video' | 'image' | 'avatar' | 'banner'>('video');
+  const [newMediaUrl, setNewMediaUrl] = useState('');
+  const [newMediaDesc, setNewMediaDesc] = useState('');
+  const [newMediaTags, setNewMediaTags] = useState('');
+  const [previewMediaItem, setPreviewMediaItem] = useState<MediaItem | null>(null);
+
+  // --- ANNOUNCEMENTS MODAL / FORM STATES ---
+  const [isAddingAnn, setIsAddingAnn] = useState(false);
+  const [newAnnTitle, setNewAnnTitle] = useState('');
+  const [newAnnMessage, setNewAnnMessage] = useState('');
+  const [newAnnType, setNewAnnType] = useState<'info' | 'celebration' | 'alert' | 'event'>('info');
+
+  // --- CHEST CONFIG EDIT STATE ---
+  const [chestEdits, setChestEdits] = useState<Record<string, Partial<MysteryChest>>>({});
+
+  // Subscribe to real-time shared content updates from server and auto-poll data
+  useEffect(() => {
+    const unsubscribe = contentService.subscribe((content) => {
+      setModules(content.modules);
+      setSigns(content.signs);
+      setChests(content.chests);
+      setMediaList(content.media);
+      setAnnouncements(content.announcements);
+    });
+
+    loadAdminAuxData(false);
+
+    // Real-time live polling for new registrations and incoming feedbacks every 3.5 seconds
+    let intervalTimer: any = null;
+    if (isLivePollingActive) {
+      intervalTimer = setInterval(() => {
+        loadAdminAuxData(true);
+      }, 3500);
+    }
+
+    return () => {
+      unsubscribe();
+      if (intervalTimer) clearInterval(intervalTimer);
+    };
+  }, [isLivePollingActive]);
+
+  const loadAdminAuxData = async (silent = false) => {
+    try {
+      const [fetchedUsers, fetchedPromos, fetchedLogs, fetchedFeedbacks] = await Promise.all([
+        adminService.fetchUsers(),
+        adminService.fetchPromoCodes(),
+        adminService.fetchAuditLogs(),
+        adminService.getFeedbacks(),
+      ]);
+
+      // Detect incoming real-time notifications
+      if (silent) {
+        setUsers((prevUsers) => {
+          if (prevUsers.length > 0 && fetchedUsers.length > prevUsers.length) {
+            setHasNewAlert(true);
+            audio.playSuccess();
+            showToast('🔔 Novo estudante cadastrado no sistema em tempo real!', 'success');
+          }
+          return fetchedUsers;
+        });
+
+        setFeedbacksList((prevFbs) => {
+          const prevPending = prevFbs.filter((f) => f.status === 'pendente').length;
+          const newPending = fetchedFeedbacks.filter((f) => f.status === 'pendente').length;
+          if (prevFbs.length > 0 && newPending > prevPending) {
+            setHasNewAlert(true);
+            audio.playSuccess();
+            showToast('🔔 Novo feedback de aluno recebido!', 'success');
+          }
+          return fetchedFeedbacks;
+        });
+      } else {
+        setUsers(fetchedUsers);
+        setFeedbacksList(fetchedFeedbacks);
+      }
+
+      setPromoCodes(fetchedPromos);
+      setAuditLogs(fetchedLogs);
+    } catch (err) {
+      console.warn('Erro ao carregar dados auxiliares do admin:', err);
+    }
+  };
+
+  const handleUpdateFeedbackStatus = async (id: string, status: FeedbackStatus, reply?: string) => {
+    setIsSaving(true);
+    const res = await adminService.updateFeedbackStatus(id, status, reply);
+    setIsSaving(false);
+    if (res.success) {
+      showToast('✅ Feedback atualizado com sucesso!');
+      setReplyingFeedbackId(null);
+      setAdminReplyText('');
+      const updated = await adminService.getFeedbacks();
+      setFeedbacksList(updated);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const triggerDeleteFeedback = (id: string, author: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Excluir Mensagem de Feedback',
+      message: `Deseja realmente excluir permanentemente este feedback enviado por "${author}"? O registro será removido do banco de dados.`,
+      confirmLabel: 'Sim, Excluir Feedback',
+      isDestructive: true,
+      onConfirm: async () => {
+        setIsSaving(true);
+        const res = await adminService.deleteFeedback(id);
+        setIsSaving(false);
+        setConfirmDialog(null);
+        if (res.success) {
+          showToast('✅ Feedback excluído do banco de dados com sucesso!');
+          const updated = await adminService.getFeedbacks();
+          setFeedbacksList(updated);
+        } else {
+          showToast('❌ ' + (res.message || 'Erro ao excluir feedback.'), 'error');
+        }
+      },
+    });
+  };
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setFeedbackMsg({ text, type });
+    if (type === 'success') audio.playSuccess();
+    else audio.playError();
+    setTimeout(() => setFeedbackMsg(null), 5000);
+  };
+
+  // --------------------------------------------------------------------------
+  // MODULES ACTIONS (SAVED PERMANENTLY TO SHARED DATABASE)
+  // --------------------------------------------------------------------------
+  const handleCreateModule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newModTitle.trim()) {
+      showToast('Digite o título da unidade.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    const res = await contentService.createModule({
+      title: newModTitle.trim(),
+      subtitle: newModSubtitle.trim() || 'Nova unidade prática criada pelo Administrador',
+      description: newModDesc.trim() || 'Aprenda os novos sinais e pratique com a câmera em tempo real.',
+      themeColor: newModTheme,
+      accentColor: '#6366f1',
+      icon: 'Sparkles',
+      level: Number(newModLevel) || modules.length + 1,
+    });
+    setIsSaving(false);
+
+    if (res.success) {
+      setIsCreatingModule(false);
+      setNewModTitle('');
+      setNewModSubtitle('');
+      setNewModDesc('');
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleUpdateModule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingModule) return;
+
+    setIsSaving(true);
+    const res = await contentService.updateModule(editingModule.id, {
+      title: editingModule.title,
+      subtitle: editingModule.subtitle,
+      description: editingModule.description,
+      themeColor: editingModule.themeColor,
+      level: Number(editingModule.level),
+    });
+    setIsSaving(false);
+
+    if (res.success) {
+      setEditingModule(null);
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleToggleModule = async (moduleId: string) => {
+    const res = await contentService.toggleModule(moduleId);
+    if (res.success) {
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleDeleteModule = async (moduleId: string, title: string) => {
+    if (!confirm(`Tem certeza de que deseja excluir a unidade "${title}"? Todas as alterações serão removidas do banco de dados compartilhado para todos os usuários.`)) {
+      return;
+    }
+    const res = await contentService.deleteModule(moduleId);
+    if (res.success) {
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // ACTIVITIES / LESSONS ACTIONS (SAVED PERMANENTLY TO SHARED DATABASE)
+  // --------------------------------------------------------------------------
+  const handleAddLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAddingLessonModuleId || !newLessonTitle.trim()) {
+      showToast('Informe o título da atividade.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    const res = await contentService.addLessonToModule(isAddingLessonModuleId, {
+      title: newLessonTitle.trim(),
+      description: newLessonDesc.trim() || 'Pratique e domine os sinais com inteligência visual.',
+      xpReward: Number(newLessonXp) || 35,
+      gemsReward: Number(newLessonGems) || 15,
+      icon: 'Sparkles',
+      targetSignIds: [newLessonSignId],
+    });
+    setIsSaving(false);
+
+    if (res.success) {
+      setIsAddingLessonModuleId(null);
+      setNewLessonTitle('');
+      setNewLessonDesc('');
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleUpdateLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLesson) return;
+
+    setIsSaving(true);
+    const res = await contentService.updateLesson(editingLesson.moduleId, editingLesson.lesson.id, {
+      title: editingLesson.lesson.title,
+      description: editingLesson.lesson.description,
+      xpReward: Number(editingLesson.lesson.xpReward),
+      gemsReward: Number(editingLesson.lesson.gemsReward),
+    });
+    setIsSaving(false);
+
+    if (res.success) {
+      setEditingLesson(null);
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleDeleteLesson = async (moduleId: string, lessonId: string, title: string) => {
+    if (!confirm(`Deseja remover a atividade "${title}" desta unidade?`)) return;
+    const res = await contentService.deleteLesson(moduleId, lessonId);
+    if (res.success) {
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // LIBRAS SIGNS (LIBRASDEX) ACTIONS (SAVED PERMANENTLY TO SHARED DATABASE)
+  // --------------------------------------------------------------------------
+  const handleCreateSign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSignName.trim()) {
+      showToast('Digite o nome do sinal.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    const res = await contentService.createSign({
+      name: newSignName.trim(),
+      category: newSignCategory,
+      difficulty: newSignDifficulty,
+      meaning: newSignMeaning.trim(),
+      contextSentence: newSignSentence.trim(),
+      cm: newSignCm.trim(),
+      pa: newSignPa.trim(),
+      m: newSignM.trim(),
+      o: newSignO.trim(),
+      ef: newSignEf.trim(),
+      videoUrl: newSignVideo.trim() || undefined,
+      imageUrl: newSignImage.trim() || undefined,
+      tips: newSignTips ? newSignTips.split('\n').filter(Boolean) : undefined,
+    });
+    setIsSaving(false);
+
+    if (res.success) {
+      setIsAddingSign(false);
+      setNewSignName('');
+      setNewSignMeaning('');
+      setNewSignSentence('');
+      setNewSignCm('');
+      setNewSignPa('');
+      setNewSignM('');
+      setNewSignO('');
+      setNewSignEf('');
+      setNewSignVideo('');
+      setNewSignImage('');
+      setNewSignTips('');
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleUpdateSign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSign) return;
+
+    setIsSaving(true);
+    const res = await contentService.updateSign(editingSign.id, {
+      name: editingSign.name,
+      category: editingSign.category,
+      difficulty: editingSign.difficulty,
+      meaning: editingSign.meaning,
+      contextSentence: editingSign.contextSentence,
+      videoUrl: editingSign.videoUrl,
+      imageUrl: editingSign.imageUrl,
+      cm: editingSign.parameters?.cm,
+      pa: editingSign.parameters?.pa,
+      m: editingSign.parameters?.m,
+      o: editingSign.parameters?.o,
+      ef: editingSign.parameters?.ef,
+    });
+    setIsSaving(false);
+
+    if (res.success) {
+      setEditingSign(null);
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleDeleteSign = async (signId: string, name: string) => {
+    if (!confirm(`Deseja excluir permanentemente o sinal "${name}" do LibrasDex compartilhado?`)) return;
+    const res = await contentService.deleteSign(signId);
+    if (res.success) {
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // MEDIA (VIDEOS & IMAGES) ACTIONS
+  // --------------------------------------------------------------------------
+  const handleAddMedia = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMediaTitle.trim() || !newMediaUrl.trim()) {
+      showToast('Preencha o título e a URL da mídia.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    const res = await contentService.addMedia({
+      title: newMediaTitle.trim(),
+      category: newMediaCategory,
+      url: newMediaUrl.trim(),
+      description: newMediaDesc.trim(),
+      tags: newMediaTags.split(',').map((t) => t.trim()).filter(Boolean),
+    });
+    setIsSaving(false);
+
+    if (res.success) {
+      setIsAddingMedia(false);
+      setNewMediaTitle('');
+      setNewMediaUrl('');
+      setNewMediaDesc('');
+      setNewMediaTags('');
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleDeleteMedia = async (id: string) => {
+    const res = await contentService.deleteMedia(id);
+    if (res.success) {
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // REWARDS & CHESTS ACTIONS
+  // --------------------------------------------------------------------------
+  const handleChestFieldChange = (chestId: string, field: keyof MysteryChest, val: any) => {
+    setChestEdits((prev) => ({
+      ...prev,
+      [chestId]: {
+        ...(prev[chestId] || {}),
+        [field]: val,
+      },
+    }));
+  };
+
+  const handleSaveChests = async () => {
+    setIsSaving(true);
+    const res = await contentService.updateChestConfigs(chestEdits);
+    setIsSaving(false);
+    if (res.success) {
+      setChestEdits({});
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleCreatePromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPromoCode.trim()) {
+      showToast('Digite um código.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    const res = await contentService.createPromoCode({
+      code: newPromoCode.trim().toUpperCase(),
+      rewardGems: Number(newPromoGems) || 0,
+      rewardXp: Number(newPromoXp) || 0,
+      rewardHearts: Number(newPromoHearts) || 0,
+      rewardChests: Number(newPromoChests) || 0,
+      maxUses: Number(newPromoUses) || 500,
+      expiresAt: newPromoExpiry ? new Date(newPromoExpiry + 'T23:59:59.000Z').toISOString() : null,
+      description: newPromoDesc.trim() || 'Código oficial de recompensas',
+    });
+    setIsSaving(false);
+
+    if (res.success) {
+      setIsAddingPromo(false);
+      setNewPromoCode('');
+      setNewPromoDesc('');
+      setNewPromoExpiry('');
+      await loadAdminAuxData();
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleTogglePromoActive = async (id: string, currentActive: boolean) => {
+    setIsSaving(true);
+    const res = await contentService.updatePromoCode(id, { active: !currentActive });
+    setIsSaving(false);
+    if (res.success) {
+      await loadAdminAuxData();
+      showToast(`✅ Código ${!currentActive ? 'ativado' : 'desativado'} com sucesso!`);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const triggerDeletePromo = (id: string, code: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Excluir Código Promocional',
+      message: `Deseja realmente excluir permanentemente o código promocional "${code}"? Esta ação removerá o cupom do banco compartilhado.`,
+      confirmLabel: 'Sim, Excluir Código',
+      isDestructive: true,
+      onConfirm: async () => {
+        setIsSaving(true);
+        const res = await contentService.deletePromoCode(id);
+        setIsSaving(false);
+        setConfirmDialog(null);
+        if (res.success) {
+          await loadAdminAuxData();
+          showToast('✅ ' + res.message);
+        } else {
+          showToast('❌ ' + res.message, 'error');
+        }
+      },
+    });
+  };
+
+  // --------------------------------------------------------------------------
+  // ANNOUNCEMENTS ACTIONS
+  // --------------------------------------------------------------------------
+  const handleCreateAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAnnTitle.trim() || !newAnnMessage.trim()) {
+      showToast('Preencha título e mensagem.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    const res = await contentService.createAnnouncement({
+      title: newAnnTitle.trim(),
+      message: newAnnMessage.trim(),
+      type: newAnnType,
+      active: true,
+      ctaText: 'Ver Trilha',
+      ctaTab: 'path',
+    });
+    setIsSaving(false);
+
+    if (res.success) {
+      setIsAddingAnn(false);
+      setNewAnnTitle('');
+      setNewAnnMessage('');
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    const res = await contentService.deleteAnnouncement(id);
+    if (res.success) {
+      showToast('✅ ' + res.message);
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // USERS MANAGEMENT
+  // --------------------------------------------------------------------------
+  const handleAdjustUser = async (
+    username: string,
+    adjustments: { gemsDelta?: number; xpDelta?: number; refillHearts?: boolean; resetProgress?: boolean }
+  ) => {
+    const ok = await adminService.adjustUser({ username, ...adjustments });
+    if (ok) {
+      await loadAdminAuxData();
+      showToast(`✅ Aluno "${username}" atualizado com sucesso no banco compartilhado!`);
+    } else {
+      showToast('❌ Erro ao atualizar aluno.', 'error');
+    }
+  };
+
+  const triggerDeleteUser = (key: string, username: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Excluir Conta do Aluno',
+      message: `Deseja realmente excluir permanentemente o cadastro de "${username}" (${key})? Todos os dados associados a este aluno serão removidos do banco de dados compartilhado.`,
+      confirmLabel: 'Sim, Excluir Aluno',
+      isDestructive: true,
+      onConfirm: async () => {
+        setIsSaving(true);
+        const res = await adminService.deleteUser(key, username);
+        setIsSaving(false);
+        setConfirmDialog(null);
+        if (res.success) {
+          await loadAdminAuxData();
+          showToast(`✅ Aluno "${username}" removido do banco de dados com sucesso!`);
+        } else {
+          showToast('❌ ' + (res.message || 'Erro ao remover aluno.'), 'error');
+        }
+      },
+    });
+  };
+
+  // --------------------------------------------------------------------------
+  // PASSWORD CHANGE
+  // --------------------------------------------------------------------------
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPass !== confirmPass) {
+      showToast('A nova senha e a confirmação não coincidem.', 'error');
+      return;
+    }
+    if (newPass.length < 4) {
+      showToast('A senha deve ter pelo menos 4 caracteres.', 'error');
+      return;
+    }
+
+    const res = await adminService.changePassword(currentPass, newPass);
+    if (res.success) {
+      showToast('✅ ' + res.message);
+      setCurrentPass('');
+      setNewPass('');
+      setConfirmPass('');
+    } else {
+      showToast('❌ ' + res.message, 'error');
+    }
+  };
+
+  // Filtered lists
+  const filteredUsers = users.filter((u) =>
+    u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.syncCode.toLowerCase().includes(userSearch.toLowerCase())
+  );
+
+  const filteredSigns = signs.filter((s) => {
+    const matchesCategory = signCategoryFilter === 'todos' || s.category === signCategoryFilter;
+    const matchesSearch =
+      s.name.toLowerCase().includes(signSearch.toLowerCase()) ||
+      s.meaning.toLowerCase().includes(signSearch.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+
+  return (
+    <div className="w-full max-w-6xl mx-auto px-4 py-6 pb-28 text-white space-y-6">
+      
+      {/* Toast Notification with Save Confirmation */}
+      {feedbackMsg && (
+        <div
+          className={`fixed top-16 right-4 z-50 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border animate-slideDown max-w-md ${
+            feedbackMsg.type === 'success'
+              ? 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200'
+              : 'bg-rose-950/95 border-rose-500/50 text-rose-200'
+          }`}
+        >
+          {feedbackMsg.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+          )}
+          <span className="text-xs sm:text-sm font-bold">{feedbackMsg.text}</span>
+          <button
+            onClick={() => setFeedbackMsg(null)}
+            className="ml-auto text-white/60 hover:text-white p-1"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Admin Header with Cloud Sync Badge */}
+      <div className="p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-indigo-500/30 shadow-2xl relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-600/30 text-white">
+              <Shield className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-black text-white">
+                  Painel Administrativo LibrasGo
+                </h1>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                  <Cloud className="w-3 h-3 text-cyan-400 animate-pulse" /> Sincronização em Nuvem Ativa
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                Todas as alterações são salvas permanentemente no banco compartilhado e sincronizadas em tempo real para celulares, tablets e computadores.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={() => {
+                audio.playClick();
+                contentService.fetchSharedContent();
+                showToast('Banco de dados compartilhado recarregado e sincronizado!');
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 hover:text-white border border-slate-700/80 transition-all cursor-pointer"
+              title="Forçar recarga imediata do banco compartilhado"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Sincronizar Agora</span>
+            </button>
+
+            {/* Live Monitoring & Notifications Center */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNotificationsDropdown(!showNotificationsDropdown);
+                  setHasNewAlert(false);
+                }}
+                className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                  hasNewAlert
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/30 animate-pulse'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                }`}
+                title="Notificações de cadastros e feedbacks em tempo real"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tempo Real</span>
+                {hasNewAlert && (
+                  <span className="w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white"></span>
+                )}
+              </button>
+
+              {showNotificationsDropdown && (
+                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-700/80 rounded-2xl p-3.5 shadow-2xl z-40 space-y-3 animate-fadeIn">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span className="text-xs font-black text-white flex items-center gap-1.5">
+                      <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                      Atividade em Tempo Real
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsLivePollingActive(!isLivePollingActive)}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full cursor-pointer ${
+                        isLivePollingActive ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {isLivePollingActive ? 'Ativo (3.5s)' : 'Pausado'}
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1 text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
+                      <div className="flex items-center justify-between text-slate-400 text-[10px]">
+                        <span>Últimos Cadastros:</span>
+                        <strong className="text-indigo-300">{users.length} total</strong>
+                      </div>
+                      <div className="mt-1 space-y-1">
+                        {users.slice(0, 3).map((u) => (
+                          <div key={u.key} className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-white truncate max-w-[130px]">{u.username}</span>
+                            <span className="text-emerald-400 font-mono text-[10px]">Nível {u.level} • {u.xp} XP</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
+                      <div className="flex items-center justify-between text-slate-400 text-[10px]">
+                        <span>Feedbacks Pendentes:</span>
+                        <strong className="text-amber-400">
+                          {feedbacksList.filter((f) => f.status === 'pendente').length} pendente(s)
+                        </strong>
+                      </div>
+                      <div className="mt-1 space-y-1">
+                        {feedbacksList.slice(0, 3).map((f) => (
+                          <div key={f.id} className="text-[11px] truncate text-slate-300">
+                            <strong className="text-amber-300 font-normal">[{f.type}]</strong> {f.title}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                audio.playClick();
+                onSwitchToLearner();
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+            >
+              <GraduationCap className="w-3.5 h-3.5" />
+              <span>Modo Aluno</span>
+            </button>
+
+            <button
+              onClick={() => {
+                audio.playClick();
+                onLogoutAdmin();
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white text-xs font-bold border border-rose-500/30 transition-all cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sair</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-slate-800">
+        {[
+          { id: 'activities', label: 'Unidades & Atividades', icon: BookOpen, badge: modules.length },
+          { id: 'signs', label: 'Sinais LibrasDex', icon: Sparkles, badge: signs.length },
+          { id: 'media', label: 'Imagens & Vídeos', icon: Film, badge: mediaList.length },
+          { id: 'rewards', label: 'Baús & Cupons', icon: Gift, badge: promoCodes.length },
+          { id: 'announcements', label: 'Avisos aos Alunos', icon: Megaphone, badge: announcements.length },
+          { id: 'users', label: 'Alunos / Usuários', icon: Users, badge: users.length },
+          { id: 'feedbacks', label: 'Feedbacks dos Alunos', icon: MessageSquare, badge: feedbacksList.filter((f) => f.status === 'pendente').length },
+          { id: 'security', label: 'Segurança & Logs', icon: KeyRound },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                audio.playClick();
+                setActiveTab(tab.id as AdminTab);
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                isActive
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40'
+                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
+              {tab.badge !== undefined && (
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full ${
+                    isActive ? 'bg-black/30 text-white' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ==================================================================== */}
+      {/* TAB 1: UNIDADES & ATIVIDADES                                         */}
+      {/* ==================================================================== */}
+      {activeTab === 'activities' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-indigo-400" />
+                Gerenciador de Unidades e Atividades Práticas
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Crie novas unidades, adicione lições interativas, pause módulos e personalize a trilha de ensino.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setIsCreatingModule(true)}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Criar Nova Unidade</span>
+            </button>
+          </div>
+
+          {/* Create Module Modal */}
+          {isCreatingModule && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <form
+                onSubmit={handleCreateModule}
+                className="w-full max-w-lg bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-black text-white flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-indigo-400" /> Nova Unidade de Aprendizado
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingModule(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Título da Unidade *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newModTitle}
+                    onChange={(e) => setNewModTitle(e.target.value)}
+                    placeholder="Ex: Módulo 16: Diálogos de Emergência e Saúde"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-white focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Subtítulo Pedagógico</label>
+                  <input
+                    type="text"
+                    value={newModSubtitle}
+                    onChange={(e) => setNewModSubtitle(e.target.value)}
+                    placeholder="Ex: Como se comunicar em situações críticas e hospitais"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Descrição</label>
+                  <textarea
+                    rows={2}
+                    value={newModDesc}
+                    onChange={(e) => setNewModDesc(e.target.value)}
+                    placeholder="Resumo das competências desenvolvidas nesta unidade"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Nível Pedagógico</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={newModLevel}
+                      onChange={(e) => setNewModLevel(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Tema Visual</label>
+                    <select
+                      value={newModTheme}
+                      onChange={(e) => setNewModTheme(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white"
+                    >
+                      <option value="from-indigo-600 to-purple-600">Índigo & Roxo</option>
+                      <option value="from-emerald-600 to-teal-600">Esmeralda & Verde</option>
+                      <option value="from-cyan-600 to-blue-600">Ciano & Azul</option>
+                      <option value="from-amber-600 to-orange-600">Âmbar & Laranja</option>
+                      <option value="from-rose-600 to-pink-600">Rosa & Rubi</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSaving ? 'Salvando no Banco Compartilhado...' : 'Salvar Unidade Permanentemente'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingModule(false)}
+                    className="px-4 py-3 rounded-2xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Edit Module Modal */}
+          {editingModule && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <form
+                onSubmit={handleUpdateModule}
+                className="w-full max-w-lg bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 shadow-2xl space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-black text-white flex items-center gap-2">
+                    <Edit2 className="w-5 h-5 text-indigo-400" /> Editar Unidade (ID: {editingModule.id})
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setEditingModule(null)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Título da Unidade</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingModule.title}
+                    onChange={(e) => setEditingModule({ ...editingModule, title: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Subtítulo</label>
+                  <input
+                    type="text"
+                    value={editingModule.subtitle}
+                    onChange={(e) => setEditingModule({ ...editingModule, subtitle: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Descrição</label>
+                  <textarea
+                    rows={2}
+                    value={editingModule.description}
+                    onChange={(e) => setEditingModule({ ...editingModule, description: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSaving ? 'Salvando...' : 'Salvar Alterações'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingModule(null)}
+                    className="px-4 py-3 rounded-2xl bg-slate-800 text-slate-300 text-xs font-bold"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Add Lesson Modal */}
+          {isAddingLessonModuleId && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <form
+                onSubmit={handleAddLesson}
+                className="w-full max-w-md bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 shadow-2xl space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-black text-white flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-indigo-400" /> Adicionar Atividade
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingLessonModuleId(null)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Título da Atividade / Lição *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newLessonTitle}
+                    onChange={(e) => setNewLessonTitle(e.target.value)}
+                    placeholder="Ex: Treino de Sinais Rápidos: Família"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Descrição</label>
+                  <input
+                    type="text"
+                    value={newLessonDesc}
+                    onChange={(e) => setNewLessonDesc(e.target.value)}
+                    placeholder="Ex: Pratique e valide a configuração de mão na câmera"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Recompensa XP</label>
+                    <input
+                      type="number"
+                      value={newLessonXp}
+                      onChange={(e) => setNewLessonXp(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Recompensa Gemas</label>
+                    <input
+                      type="number"
+                      value={newLessonGems}
+                      onChange={(e) => setNewLessonGems(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Sinal Alvo para Prática AR</label>
+                  <select
+                    value={newLessonSignId}
+                    onChange={(e) => setNewLessonSignId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white"
+                  >
+                    {signs.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.category})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Atividade</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingLessonModuleId(null)}
+                    className="px-4 py-3 rounded-2xl bg-slate-800 text-slate-300 text-xs font-bold"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Edit Lesson Modal */}
+          {editingLesson && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <form
+                onSubmit={handleUpdateLesson}
+                className="w-full max-w-md bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 shadow-2xl space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-black text-white flex items-center gap-2">
+                    <Edit2 className="w-5 h-5 text-indigo-400" /> Editar Atividade
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setEditingLesson(null)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Título</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingLesson.lesson.title}
+                    onChange={(e) =>
+                      setEditingLesson({
+                        ...editingLesson,
+                        lesson: { ...editingLesson.lesson, title: e.target.value },
+                      })
+                    }
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Descrição</label>
+                  <input
+                    type="text"
+                    value={editingLesson.lesson.description}
+                    onChange={(e) =>
+                      setEditingLesson({
+                        ...editingLesson,
+                        lesson: { ...editingLesson.lesson, description: e.target.value },
+                      })
+                    }
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">XP</label>
+                    <input
+                      type="number"
+                      value={editingLesson.lesson.xpReward}
+                      onChange={(e) =>
+                        setEditingLesson({
+                          ...editingLesson,
+                          lesson: { ...editingLesson.lesson, xpReward: Number(e.target.value) },
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Gemas</label>
+                    <input
+                      type="number"
+                      value={editingLesson.lesson.gemsReward}
+                      onChange={(e) =>
+                        setEditingLesson({
+                          ...editingLesson,
+                          lesson: { ...editingLesson.lesson, gemsReward: Number(e.target.value) },
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Alterações</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingLesson(null)}
+                    className="px-4 py-3 rounded-2xl bg-slate-800 text-slate-300 text-xs font-bold"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Modules List */}
+          <div className="grid grid-cols-1 gap-3">
+            {modules.map((mod) => {
+              const isEnabled = mod.enabled !== false;
+              const isExpanded = expandedModuleId === mod.id;
+
+              return (
+                <div
+                  key={mod.id}
+                  className={`p-4 sm:p-5 rounded-3xl border transition-all ${
+                    isEnabled
+                      ? 'bg-slate-900 border-slate-800'
+                      : 'bg-slate-950/80 border-slate-800/60 opacity-60'
+                  }`}
+                >
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center font-black text-sm flex-shrink-0">
+                        {mod.level}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-sm sm:text-base font-black text-white">{mod.title}</h4>
+                          <span
+                            className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                              isEnabled
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            }`}
+                          >
+                            {isEnabled ? 'Ativo na Trilha' : 'Em Manutenção'}
+                          </span>
+                          {mod.isCustom && (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                              Personalizada
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">{mod.subtitle}</p>
+
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
+                          <span>{mod.lessons.length} atividades cadastradas</span>
+                          <span>•</span>
+                          <span className="font-mono text-[11px] text-indigo-400">ID: {mod.id}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 self-end md:self-center flex-wrap">
+                      <button
+                        onClick={() => setExpandedModuleId(isExpanded ? null : mod.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition-all cursor-pointer"
+                        title="Ver lições e atividades desta unidade"
+                      >
+                        <span>{isExpanded ? 'Ocultar Lições' : 'Ver Lições'}</span>
+                        {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </button>
+
+                      <button
+                        onClick={() => setIsAddingLessonModuleId(mod.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white text-xs font-bold border border-indigo-500/30 transition-all cursor-pointer"
+                        title="Adicionar lição a esta unidade"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Adicionar Atividade</span>
+                      </button>
+
+                      <button
+                        onClick={() => setEditingModule(mod)}
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
+                        title="Editar Unidade"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => handleToggleModule(mod.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          isEnabled
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500 hover:text-slate-950'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500 hover:text-slate-950'
+                        }`}
+                      >
+                        {isEnabled ? 'Pausar' : 'Ativar'}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteModule(mod.id, mod.title)}
+                        className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 transition-all cursor-pointer"
+                        title="Excluir Unidade"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Expanded Lessons List inside Module */}
+                  {isExpanded && (
+                    <div className="mt-4 pt-4 border-t border-slate-800/80 space-y-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                          Atividades e Exercícios da Unidade ({mod.lessons.length})
+                        </span>
+                        <button
+                          onClick={() => setIsAddingLessonModuleId(mod.id)}
+                          className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Adicionar Lição
+                        </button>
+                      </div>
+
+                      {mod.lessons.map((lesson, idx) => (
+                        <div
+                          key={lesson.id}
+                          className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-300 text-xs font-black flex items-center justify-center">
+                              {idx + 1}
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h5 className="text-xs sm:text-sm font-bold text-white">{lesson.title}</h5>
+                                <span className="text-[10px] text-amber-400 font-bold">+{lesson.xpReward} XP</span>
+                                <span className="text-[10px] text-cyan-400 font-bold">+{lesson.gemsReward} 💎</span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 mt-0.5">{lesson.description}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              onClick={() => setEditingLesson({ moduleId: mod.id, lesson })}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
+                              title="Editar Atividade"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteLesson(mod.id, lesson.id, lesson.title)}
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white"
+                              title="Excluir Atividade"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 2: SINAIS DE LIBRAS (LIBRASDEX)                                  */}
+      {/* ==================================================================== */}
+      {activeTab === 'signs' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-indigo-400" />
+                Catálogo de Sinais do LibrasDex ({signs.length} Sinais)
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Cadastre novos sinais, edite parâmetros gramaticais (CM, PA, M, O, EF) e vincule vídeos e fotos.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setIsAddingSign(true)}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Cadastrar Novo Sinal</span>
+            </button>
+          </div>
+
+          {/* Search & Category Filter */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2 relative">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={signSearch}
+                onChange={(e) => setSignSearch(e.target.value)}
+                placeholder="Buscar sinal por nome ou significado..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-bold text-white placeholder-slate-500 focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <select
+                value={signCategoryFilter}
+                onChange={(e) => setSignCategoryFilter(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-300 focus:border-indigo-500"
+              >
+                <option value="todos">Todas as Categorias</option>
+                <option value="alfabeto">Alfabeto Manual</option>
+                <option value="saudacoes">Saudações</option>
+                <option value="respostas">Respostas</option>
+                <option value="familia">Família</option>
+                <option value="sentimentos">Sentimentos</option>
+                <option value="cotidiano">Cotidiano</option>
+                <option value="numeros">Números</option>
+                <option value="cores">Cores</option>
+                <option value="alimentos">Alimentos</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Add Sign Modal */}
+          {isAddingSign && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <form
+                onSubmit={handleCreateSign}
+                className="w-full max-w-xl bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-black text-white flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-indigo-400" /> Cadastrar Novo Sinal em Libras
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingSign(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Nome do Sinal *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newSignName}
+                      onChange={(e) => setNewSignName(e.target.value)}
+                      placeholder="Ex: Saudade, Amor, Água"
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Categoria</label>
+                    <select
+                      value={newSignCategory}
+                      onChange={(e) => setNewSignCategory(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white"
+                    >
+                      <option value="saudacoes">Saudações</option>
+                      <option value="alfabeto">Alfabeto Manual</option>
+                      <option value="familia">Família</option>
+                      <option value="sentimentos">Sentimentos</option>
+                      <option value="respostas">Respostas</option>
+                      <option value="cotidiano">Cotidiano</option>
+                      <option value="numeros">Números</option>
+                      <option value="cores">Cores</option>
+                      <option value="alimentos">Alimentos</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Significado Pedagógico</label>
+                  <input
+                    type="text"
+                    value={newSignMeaning}
+                    onChange={(e) => setNewSignMeaning(e.target.value)}
+                    placeholder="Ex: Sentimento de nostalgia ou afeto por alguém ausente"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                  />
+                </div>
+
+                <div className="border border-indigo-500/20 bg-indigo-950/20 p-3.5 rounded-2xl space-y-3">
+                  <span className="text-[11px] uppercase tracking-wider font-extrabold text-indigo-300 block">
+                    Parâmetros Gramaticais da Libras
+                  </span>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">CM (Config. de Mão)</span>
+                      <input
+                        type="text"
+                        value={newSignCm}
+                        onChange={(e) => setNewSignCm(e.target.value)}
+                        placeholder="Ex: Mão em 'S'"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">PA (Ponto de Artic.)</span>
+                      <input
+                        type="text"
+                        value={newSignPa}
+                        onChange={(e) => setNewSignPa(e.target.value)}
+                        placeholder="Ex: Peito, testa"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">M (Movimento)</span>
+                      <input
+                        type="text"
+                        value={newSignM}
+                        onChange={(e) => setNewSignM(e.target.value)}
+                        placeholder="Ex: Circular no peito"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">O (Orientação)</span>
+                      <input
+                        type="text"
+                        value={newSignO}
+                        onChange={(e) => setNewSignO(e.target.value)}
+                        placeholder="Ex: Palma para si"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">EF (Expressão Facial)</span>
+                      <input
+                        type="text"
+                        value={newSignEf}
+                        onChange={(e) => setNewSignEf(e.target.value)}
+                        placeholder="Ex: Saudosa, reflexiva"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Vídeo de Demonstração (URL)</label>
+                    <input
+                      type="url"
+                      value={newSignVideo}
+                      onChange={(e) => setNewSignVideo(e.target.value)}
+                      placeholder="https://youtube.com/... ou mp4"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Foto / Ilustração (URL)</label>
+                    <input
+                      type="url"
+                      value={newSignImage}
+                      onChange={(e) => setNewSignImage(e.target.value)}
+                      placeholder="https://... imagem do sinal"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Dicas de Execução (1 por linha)</label>
+                  <textarea
+                    rows={2}
+                    value={newSignTips}
+                    onChange={(e) => setNewSignTips(e.target.value)}
+                    placeholder="Mantenha a postura correta&#10;Articule o movimento sem rigidez"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Sinal no Banco Compartilhado</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingSign(false)}
+                    className="px-4 py-3 rounded-2xl bg-slate-800 text-slate-300 text-xs font-bold"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Edit Sign Modal */}
+          {editingSign && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <form
+                onSubmit={handleUpdateSign}
+                className="w-full max-w-lg bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-black text-white flex items-center gap-2">
+                    <Edit2 className="w-5 h-5 text-indigo-400" /> Editar Sinal: {editingSign.name}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setEditingSign(null)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Nome</label>
+                    <input
+                      type="text"
+                      required
+                      value={editingSign.name}
+                      onChange={(e) => setEditingSign({ ...editingSign, name: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Categoria</label>
+                    <select
+                      value={editingSign.category}
+                      onChange={(e) => setEditingSign({ ...editingSign, category: e.target.value as any })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white"
+                    >
+                      <option value="saudacoes">Saudações</option>
+                      <option value="alfabeto">Alfabeto Manual</option>
+                      <option value="familia">Família</option>
+                      <option value="sentimentos">Sentimentos</option>
+                      <option value="respostas">Respostas</option>
+                      <option value="cotidiano">Cotidiano</option>
+                      <option value="numeros">Números</option>
+                      <option value="cores">Cores</option>
+                      <option value="alimentos">Alimentos</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Significado</label>
+                  <input
+                    type="text"
+                    value={editingSign.meaning}
+                    onChange={(e) => setEditingSign({ ...editingSign, meaning: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Vídeo URL</label>
+                  <input
+                    type="url"
+                    value={editingSign.videoUrl || ''}
+                    onChange={(e) => setEditingSign({ ...editingSign, videoUrl: e.target.value })}
+                    placeholder="https://..."
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Alterações</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingSign(null)}
+                    className="px-4 py-3 rounded-2xl bg-slate-800 text-slate-300 text-xs font-bold"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Signs Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {filteredSigns.map((sign) => (
+              <div
+                key={sign.id}
+                className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col justify-between gap-3 hover:border-indigo-500/40 transition-all"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {sign.category}
+                    </span>
+                    {sign.videoUrl && (
+                      <span className="text-[10px] font-bold text-cyan-300 flex items-center gap-1">
+                        <Video className="w-3 h-3" /> Vídeo
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="text-base font-black text-white">{sign.name}</h4>
+                  <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{sign.meaning}</p>
+
+                  <div className="mt-2 pt-2 border-t border-slate-800 text-[11px] text-slate-400 space-y-0.5">
+                    <div><strong>CM:</strong> {sign.parameters?.cm || 'Livre'}</div>
+                    <div><strong>PA:</strong> {sign.parameters?.pa || 'Espaço neutro'}</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                  <span className="text-[10px] font-mono text-slate-500">ID: {sign.id}</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setEditingSign(sign)}
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
+                      title="Editar Sinal"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSign(sign.id, sign.name)}
+                      className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white"
+                      title="Excluir Sinal"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 3: IMAGENS E VÍDEOS                                              */}
+      {/* ==================================================================== */}
+      {activeTab === 'media' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <Film className="w-5 h-5 text-indigo-400" />
+                Biblioteca de Mídia Compartilhada
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Gerencie vídeos instrucionais, ilustrações anatômicas e recursos visuais sincronizados para todos os aparelhos.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setIsAddingMedia(true)}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Adicionar Mídia</span>
+            </button>
+          </div>
+
+          {/* Add Media Modal */}
+          {isAddingMedia && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <form
+                onSubmit={handleAddMedia}
+                className="w-full max-w-lg bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 shadow-2xl space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-black text-white flex items-center gap-2">
+                    <Film className="w-5 h-5 text-indigo-400" /> Cadastrar Mídia
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingMedia(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Título da Mídia *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newMediaTitle}
+                    onChange={(e) => setNewMediaTitle(e.target.value)}
+                    placeholder="Ex: Alfabeto Dactilológico Completo"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Tipo de Mídia</label>
+                    <select
+                      value={newMediaCategory}
+                      onChange={(e) => setNewMediaCategory(e.target.value as any)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white"
+                    >
+                      <option value="video">Vídeo (YouTube / MP4)</option>
+                      <option value="image">Imagem / Ilustração</option>
+                      <option value="avatar">Avatar de Mascote</option>
+                      <option value="banner">Banner do Aplicativo</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">Tags (separadas por vírgula)</label>
+                    <input
+                      type="text"
+                      value={newMediaTags}
+                      onChange={(e) => setNewMediaTags(e.target.value)}
+                      placeholder="alfabeto, iniciante"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">URL da Mídia (Embed / Link Direto) *</label>
+                  <input
+                    type="url"
+                    required
+                    value={newMediaUrl}
+                    onChange={(e) => setNewMediaUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Descrição</label>
+                  <textarea
+                    rows={2}
+                    value={newMediaDesc}
+                    onChange={(e) => setNewMediaDesc(e.target.value)}
+                    placeholder="Instruções sobre o conteúdo visual..."
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Salvar no Banco Compartilhado</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingMedia(false)}
+                    className="px-4 py-3 rounded-2xl bg-slate-800 text-slate-300 text-xs font-bold"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Media Items Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {mediaList.map((item) => (
+              <div
+                key={item.id}
+                className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col justify-between gap-3 overflow-hidden"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {item.category}
+                    </span>
+                    <button
+                      onClick={() => setPreviewMediaItem(item)}
+                      className="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Play className="w-3 h-3" /> Visualizar
+                    </button>
+                  </div>
+                  <h4 className="text-sm font-black text-white">{item.title}</h4>
+                  <p className="text-xs text-slate-400 mt-1 line-clamp-2">{item.description}</p>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                  <span className="text-[10px] font-mono text-slate-500 truncate max-w-[150px]">{item.url}</span>
+                  <button
+                    onClick={() => handleDeleteMedia(item.id)}
+                    className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white"
+                    title="Excluir Mídia"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Media Preview Modal */}
+          {previewMediaItem && (
+            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-3xl p-5 shadow-2xl relative">
+                <button
+                  onClick={() => setPreviewMediaItem(null)}
+                  className="absolute top-4 right-4 p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <h4 className="text-base font-black text-white mb-3">{previewMediaItem.title}</h4>
+                {previewMediaItem.category === 'video' ? (
+                  <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black">
+                    <iframe
+                      src={previewMediaItem.url}
+                      className="w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <img
+                    src={previewMediaItem.url}
+                    alt={previewMediaItem.title}
+                    className="w-full max-h-[60vh] object-contain rounded-2xl bg-slate-950"
+                  />
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 4: RECOMPENSAS & BAÚS MISTERIOSOS                                */}
+      {/* ==================================================================== */}
+      {activeTab === 'rewards' && (
+        <div className="space-y-6">
+          {/* Mystery Chests Configuration */}
+          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Gift className="w-5 h-5 text-indigo-400" />
+                  Configurador de Recompensas e Baús Misteriosos
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Ajuste custos de gemas, limites de XP e recompensas em moedas. As alterações são sincronizadas para todos os alunos na loja.
+                </p>
+              </div>
+
+              <button
+                onClick={handleSaveChests}
+                disabled={isSaving}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-xs shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSaving ? 'Salvando...' : 'Salvar Baús no Banco Compartilhado'}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {chests.map((chest) => {
+                const edits = chestEdits[chest.id] || {};
+                const cost = edits.cost !== undefined ? edits.cost : chest.cost;
+                const minXp = edits.minXp !== undefined ? edits.minXp : chest.minXp;
+                const maxXp = edits.maxXp !== undefined ? edits.maxXp : chest.maxXp;
+                const minCoins = edits.minCoins !== undefined ? edits.minCoins : chest.minCoins;
+                const maxCoins = edits.maxCoins !== undefined ? edits.maxCoins : chest.maxCoins;
+
+                return (
+                  <div key={chest.id} className="p-4 rounded-3xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase text-amber-400">{chest.name}</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-400">Raridade: {chest.rarity}</span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 block mb-1">Custo (Gemas)</label>
+                        <input
+                          type="number"
+                          value={cost}
+                          onChange={(e) => handleChestFieldChange(chest.id, 'cost', Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 block mb-1">XP Mín</label>
+                        <input
+                          type="number"
+                          value={minXp}
+                          onChange={(e) => handleChestFieldChange(chest.id, 'minXp', Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 block mb-1">XP Máx</label>
+                        <input
+                          type="number"
+                          value={maxXp}
+                          onChange={(e) => handleChestFieldChange(chest.id, 'maxXp', Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 block mb-1">Moedas Mín</label>
+                        <input
+                          type="number"
+                          value={minCoins}
+                          onChange={(e) => handleChestFieldChange(chest.id, 'minCoins', Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 block mb-1">Moedas Máx</label>
+                        <input
+                          type="number"
+                          value={maxCoins}
+                          onChange={(e) => handleChestFieldChange(chest.id, 'maxCoins', Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Promo Codes & Rewards Manager */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                  <Gift className="w-5 h-5 text-purple-400" />
+                  Gerenciador de Códigos de Resgate & Recompensas
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Crie e gerencie códigos oficiais distribuídos aos alunos com Diamantes, XP, Vidas e Baús. Configure regras de validade, limite de resgates e ative/desative a qualquer momento.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setIsAddingPromo(!isAddingPromo)}
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs shadow-lg shadow-purple-600/30 transition-all cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{isAddingPromo ? 'Fechar Formulário' : 'Novo Código'}</span>
+              </button>
+            </div>
+
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Total de Códigos</span>
+                <p className="text-lg font-black text-white">{promoCodes.length}</p>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800">
+                <span className="text-[10px] font-bold text-emerald-400 uppercase">Códigos Ativos</span>
+                <p className="text-lg font-black text-emerald-400">
+                  {promoCodes.filter((p) => p.active).length}
+                </p>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800">
+                <span className="text-[10px] font-bold text-cyan-400 uppercase">Resgates Realizados</span>
+                <p className="text-lg font-black text-cyan-400">
+                  {promoCodes.reduce((acc, p) => acc + (p.usedCount || 0), 0)}
+                </p>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800">
+                <span className="text-[10px] font-bold text-purple-400 uppercase">Aba Resgate</span>
+                <p className="text-xs font-black text-purple-300 mt-1">Disponível a todos os alunos</p>
+              </div>
+            </div>
+
+            {/* Add Promo Code Form */}
+            {isAddingPromo && (
+              <form onSubmit={handleCreatePromo} className="p-5 rounded-2xl bg-slate-950 border border-purple-500/40 space-y-4 animate-fadeIn">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h5 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-400" />
+                    Criar Novo Código de Recompensa
+                  </h5>
+                  <span className="text-[10px] text-slate-400">Cada aluno poderá resgatar este código 1 vez</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                      Código do Cupom *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: LIBRASVIP, NATAL2026"
+                      value={newPromoCode}
+                      onChange={(e) => setNewPromoCode(e.target.value.toUpperCase())}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-white uppercase font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                      Recompensa em Diamantes 💎
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newPromoGems}
+                      onChange={(e) => setNewPromoGems(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                      Recompensa em XP ⚡
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newPromoXp}
+                      onChange={(e) => setNewPromoXp(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                      Vidas Restauradas ❤️
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      value={newPromoHearts}
+                      onChange={(e) => setNewPromoHearts(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                      Baús Misteriosos de Presente 🎁
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="20"
+                      value={newPromoChests}
+                      onChange={(e) => setNewPromoChests(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                      Limite Global de Resgates
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={newPromoUses}
+                      onChange={(e) => setNewPromoUses(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                      Data de Validade (Opcional)
+                    </label>
+                    <input
+                      type="date"
+                      value={newPromoExpiry}
+                      onChange={(e) => setNewPromoExpiry(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                      Descrição / Finalidade do Código
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Premiação do desafio de expressões faciais da semana"
+                      value={newPromoDesc}
+                      onChange={(e) => setNewPromoDesc(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs cursor-pointer shadow-md shadow-purple-600/30 flex items-center gap-1.5"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Salvar e Ativar Código</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingPromo(false)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Search and Filters Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+              <div className="relative w-full sm:w-64">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Buscar código..."
+                  value={promoSearch}
+                  onChange={(e) => setPromoSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                {(['all', 'active', 'inactive'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setPromoFilter(filter)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      promoFilter === filter
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    {filter === 'all' && 'Todos'}
+                    {filter === 'active' && 'Ativos'}
+                    {filter === 'inactive' && 'Desativados'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Promo Codes List */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {promoCodes
+                .filter((p) => {
+                  if (promoFilter === 'active' && !p.active) return false;
+                  if (promoFilter === 'inactive' && p.active) return false;
+                  if (promoSearch.trim()) {
+                    const q = promoSearch.toLowerCase();
+                    return p.code.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q);
+                  }
+                  return true;
+                })
+                .map((p) => {
+                  const isExpired = p.expiresAt && new Date() > new Date(p.expiresAt);
+                  const usagePercent = Math.min(100, Math.round(((p.usedCount || 0) / (p.maxUses || 1)) * 100));
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`p-4 rounded-2xl bg-slate-950 border flex flex-col justify-between gap-3 transition-all ${
+                        !p.active
+                          ? 'border-slate-800/60 opacity-75'
+                          : isExpired
+                          ? 'border-amber-500/40'
+                          : 'border-slate-800 hover:border-purple-500/40 shadow-sm'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        {/* Status Header */}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-base font-black text-purple-300 font-mono tracking-wider">
+                            {p.code}
+                          </span>
+                          <span
+                            className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                              !p.active
+                                ? 'bg-slate-800 text-slate-400 border-slate-700'
+                                : isExpired
+                                ? 'bg-amber-950/60 text-amber-300 border-amber-500/30'
+                                : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
+                            }`}
+                          >
+                            {!p.active ? 'Desativado' : isExpired ? 'Expirado' : 'Ativo'}
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-300 line-clamp-2">
+                          {p.description || 'Código promocional oficial'}
+                        </p>
+
+                        {/* Rewards Badges */}
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          {p.rewardGems > 0 && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-cyan-950/60 border border-cyan-500/30 text-cyan-300">
+                              +{p.rewardGems} 💎
+                            </span>
+                          )}
+                          {p.rewardXp > 0 && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-950/60 border border-amber-500/30 text-amber-300">
+                              +{p.rewardXp} XP
+                            </span>
+                          )}
+                          {p.rewardHearts !== undefined && p.rewardHearts > 0 && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-rose-950/60 border border-rose-500/30 text-rose-300">
+                              +{p.rewardHearts} ❤️
+                            </span>
+                          )}
+                          {p.rewardChests !== undefined && p.rewardChests > 0 && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-purple-950/60 border border-purple-500/30 text-purple-300">
+                              +{p.rewardChests} 🎁 Baú{p.rewardChests > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Usage Progress Bar */}
+                        <div className="space-y-1 pt-1">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                            <span>Resgates: <strong className="text-white">{p.usedCount || 0}</strong> / {p.maxUses}</span>
+                            <span>{usagePercent}%</span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-slate-900 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                usagePercent >= 100
+                                  ? 'bg-rose-500'
+                                  : usagePercent >= 75
+                                  ? 'bg-amber-500'
+                                  : 'bg-purple-500'
+                              }`}
+                              style={{ width: `${usagePercent}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Validity Info */}
+                        <div className="text-[10px] text-slate-400 pt-0.5">
+                          {p.expiresAt ? (
+                            <span>
+                              Validade: <strong className={isExpired ? 'text-amber-400' : 'text-slate-300'}>{new Date(p.expiresAt).toLocaleDateString('pt-BR')}</strong>
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">Sem data de expiração</span>
+                          )}
+                        </div>
+
+                        {/* Redeemed Users Count */}
+                        {Array.isArray(p.redeemedUsers) && p.redeemedUsers.length > 0 && (
+                          <div className="text-[10px] text-purple-300/80 bg-purple-950/30 px-2 py-1 rounded-lg border border-purple-500/20">
+                            👥 {p.redeemedUsers.length} aluno(s) já resgataram
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Card Action Buttons */}
+                      <div className="flex items-center justify-between gap-2 border-t border-slate-800/80 pt-2.5">
+                        <div className="flex items-center gap-1.5">
+                          {/* Toggle Active / Inactive */}
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePromoActive(p.id, p.active)}
+                            disabled={isSaving}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                              p.active
+                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                                : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                            }`}
+                            title={p.active ? 'Desativar código' : 'Reativar código'}
+                          >
+                            {p.active ? 'Desativar' : 'Ativar'}
+                          </button>
+
+                          {/* Quick Copy to Clipboard */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(p.code);
+                              showToast(`Código ${p.code} copiado para a área de transferência!`);
+                            }}
+                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer"
+                            title="Copiar código para divulgar aos alunos"
+                          >
+                            <ClipboardPaste className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Delete Button */}
+                        <button
+                          type="button"
+                          onClick={() => triggerDeletePromo(p.id, p.code)}
+                          disabled={isSaving}
+                          className="text-xs text-rose-400 hover:text-rose-300 p-1 flex items-center gap-1 cursor-pointer"
+                          title="Excluir código"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 5: AVISOS AOS ALUNOS                                             */}
+      {/* ==================================================================== */}
+      {activeTab === 'announcements' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-indigo-400" />
+                Mural de Avisos em Tempo Real
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Publique mensagens que aparecem no topo do cabeçalho de todos os usuários em celulares, tablets e computadores.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setIsAddingAnn(true)}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Novo Aviso</span>
+            </button>
+          </div>
+
+          {/* Add Announcement Form */}
+          {isAddingAnn && (
+            <form onSubmit={handleCreateAnnouncement} className="p-5 rounded-3xl bg-slate-900 border border-indigo-500/40 space-y-4">
+              <h4 className="text-sm font-black text-white uppercase">Publicar Comunicado Geral</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Título do Aviso *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newAnnTitle}
+                    onChange={(e) => setNewAnnTitle(e.target.value)}
+                    placeholder="Ex: 🎉 Nova Semana de Desafios em Libras!"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Tipo de Aviso</label>
+                  <select
+                    value={newAnnType}
+                    onChange={(e) => setNewAnnType(e.target.value as any)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white"
+                  >
+                    <option value="info">Informativo</option>
+                    <option value="celebration">Comemoração</option>
+                    <option value="alert">Alerta / Manutenção</option>
+                    <option value="event">Evento Especial</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">Mensagem aos Alunos *</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={newAnnMessage}
+                  onChange={(e) => setNewAnnMessage(e.target.value)}
+                  placeholder="Descreva o anúncio com clareza..."
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs cursor-pointer"
+                >
+                  Publicar Aviso Agora
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingAnn(false)}
+                  className="py-2.5 px-4 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Announcements List */}
+          <div className="grid grid-cols-1 gap-3">
+            {announcements.map((ann) => (
+              <div
+                key={ann.id}
+                className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-4"
+              >
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-black text-amber-300">{ann.title}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-bold uppercase">
+                      {ann.type}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300">{ann.message}</p>
+                </div>
+
+                <button
+                  onClick={() => handleDeleteAnnouncement(ann.id)}
+                  className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white transition-all cursor-pointer flex-shrink-0"
+                  title="Excluir Aviso"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 6: ALUNOS / USUÁRIOS                                            */}
+      {/* ==================================================================== */}
+      {activeTab === 'users' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-400" />
+                Alunos e Perfis Conectados na Nuvem
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Monitore o progresso individual, códigos de sincronização e ajuste recompensas de cada estudante.
+              </p>
+            </div>
+
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="Buscar por nome ou código..."
+                className="pl-9 pr-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white placeholder-slate-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {filteredUsers.map((u) => (
+              <div key={u.key} className="p-4 rounded-3xl bg-slate-900 border border-slate-800 space-y-3">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={u.avatarUrl}
+                    alt={u.username}
+                    className="w-11 h-11 rounded-2xl object-cover border border-slate-700"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-black text-white truncate">{u.username}</h4>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        {u.syncCode}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
+                      <span>Nível {u.level}</span>
+                      <span>•</span>
+                      <span className="text-amber-400 font-bold">{u.xp} XP</span>
+                      <span>•</span>
+                      <span className="text-cyan-400 font-bold">{u.gems} 💎</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
+                  <span className="text-slate-500 text-[11px]">Última atividade: {u.lastActive}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    <button
+                      onClick={() => setSelectedUserDetail(u)}
+                      className="px-2 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white font-bold text-[11px] cursor-pointer flex items-center gap-1"
+                      title="Ver status detalhado, progresso, lições e dados"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>Detalhes</span>
+                    </button>
+                    <button
+                      onClick={() => handleAdjustUser(u.username, { gemsDelta: 100 })}
+                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 font-bold text-[11px] cursor-pointer"
+                      title="Dar +100 Gemas"
+                    >
+                      +100 💎
+                    </button>
+                    <button
+                      onClick={() => handleAdjustUser(u.username, { refillHearts: true })}
+                      className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white font-bold text-[11px] cursor-pointer"
+                      title="Recarregar Corações"
+                    >
+                      5 ❤️
+                    </button>
+                    <button
+                      onClick={() => triggerDeleteUser(u.key, u.username)}
+                      className="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white cursor-pointer transition-colors"
+                      title="Excluir Registro Permanente"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 7: SEGURANÇA E AUDITORIA                                         */}
+      {/* ==================================================================== */}
+      {activeTab === 'security' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Change Password */}
+          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+            <h4 className="text-base font-black text-white flex items-center gap-2">
+              <Lock className="w-5 h-5 text-indigo-400" /> Alterar Senha Mestra do Administrador
+            </h4>
+            <p className="text-xs text-slate-400">
+              A nova senha será salva no banco compartilhado e exigida no login em qualquer navegador.
+            </p>
+
+            <form onSubmit={handleChangePassword} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">Senha Atual</label>
+                <input
+                  type="password"
+                  required
+                  value={currentPass}
+                  onChange={(e) => setCurrentPass(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">Nova Senha</label>
+                <input
+                  type="password"
+                  required
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">Confirmar Nova Senha</label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPass}
+                  onChange={(e) => setConfirmPass(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs cursor-pointer shadow-lg shadow-indigo-600/30"
+              >
+                Atualizar Senha Mestra
+              </button>
+            </form>
+          </div>
+
+          {/* Audit Logs */}
+          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-3">
+            <h4 className="text-base font-black text-white flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-indigo-400" /> Histórico de Alterações na Nuvem
+            </h4>
+            <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+              {auditLogs.map((log) => (
+                <div key={log.id} className="p-3 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-indigo-300">{log.action}</span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {new Date(log.timestamp).toLocaleTimeString('pt-BR')}
+                    </span>
+                  </div>
+                  <p className="text-slate-400 text-[11px]">{log.details}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 8: FEEDBACKS DOS ALUNOS                                          */}
+      {/* ==================================================================== */}
+      {activeTab === 'feedbacks' && (
+        <div className="space-y-6">
+          {/* Header & Stats Banner */}
+          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-teal-400" />
+                  Central de Feedbacks, Sugestões e Erros
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Respostas aos feedbacks ficam visíveis diretamente no painel do aluno na aba Feedbacks.
+                </p>
+              </div>
+
+              <button
+                onClick={() => loadAdminAuxData(false)}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 transition-colors self-start sm:self-auto cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Atualizar Lista
+              </button>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800/80">
+              <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Recebidos</span>
+                <span className="text-xl font-black text-white">{feedbacksList.length}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+                <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">Pendentes</span>
+                <span className="text-xl font-black text-amber-400">
+                  {feedbacksList.filter((f) => f.status === 'pendente').length}
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/30">
+                <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider block">Em Análise</span>
+                <span className="text-xl font-black text-indigo-400">
+                  {feedbacksList.filter((f) => f.status === 'em_analise').length}
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
+                <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider block">Resolvidos</span>
+                <span className="text-xl font-black text-emerald-400">
+                  {feedbacksList.filter((f) => f.status === 'resolvido').length}
+                </span>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <span className="text-xs font-bold text-slate-400 mr-1">Filtrar por Status:</span>
+              {(['todos', 'pendente', 'em_analise', 'resolvido', 'arquivado'] as const).map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setFeedbackStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    feedbackStatusFilter === st
+                      ? 'bg-teal-500 text-slate-950 font-black'
+                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {st === 'todos' ? 'Todos' : st === 'pendente' ? 'Pendentes' : st === 'em_analise' ? 'Em Análise' : st === 'resolvido' ? 'Resolvidos' : 'Arquivados'}
+                </button>
+              ))}
+
+              <span className="text-xs font-bold text-slate-400 ml-3 mr-1">Categoria:</span>
+              {(['todos', 'sugestao', 'erro', 'reclamacao', 'elogio'] as const).map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setFeedbackCategoryFilter(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    feedbackCategoryFilter === cat
+                      ? 'bg-indigo-600 text-white font-black'
+                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {cat === 'todos' ? 'Todas' : cat === 'sugestao' ? '💡 Sugestões' : cat === 'erro' ? '🐛 Erros' : cat === 'reclamacao' ? '⚠️ Reclamações' : '⭐ Elogios'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Feedback Items List */}
+          {feedbacksList.filter((f) => {
+            const matchesStatus = feedbackStatusFilter === 'todos' || f.status === feedbackStatusFilter;
+            const matchesCategory = feedbackCategoryFilter === 'todos' || f.type === feedbackCategoryFilter;
+            return matchesStatus && matchesCategory;
+          }).length === 0 ? (
+            <div className="p-12 text-center rounded-3xl bg-slate-900 border border-slate-800 text-slate-400 space-y-2">
+              <MessageSquare className="w-12 h-12 text-slate-600 mx-auto" />
+              <p className="font-bold text-slate-300">Nenhum feedback encontrado com os filtros selecionados.</p>
+              <p className="text-xs text-slate-500">Quando os estudantes enviarem mensagens pela aba Feedbacks, elas aparecerão aqui.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {feedbacksList
+                .filter((f) => {
+                  const matchesStatus = feedbackStatusFilter === 'todos' || f.status === feedbackStatusFilter;
+                  const matchesCategory = feedbackCategoryFilter === 'todos' || f.type === feedbackCategoryFilter;
+                  return matchesStatus && matchesCategory;
+                })
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 hover:border-slate-700 transition-all shadow-md"
+                  >
+                    {/* Header Row */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-black px-2.5 py-1 rounded-lg ${
+                            item.type === 'erro'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                              : item.type === 'sugestao'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : item.type === 'elogio'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                          }`}
+                        >
+                          {item.type === 'erro'
+                            ? '🐛 Erro / Bug'
+                            : item.type === 'sugestao'
+                            ? '💡 Sugestão'
+                            : item.type === 'elogio'
+                            ? '⭐ Elogio'
+                            : '⚠️ Reclamação'}
+                        </span>
+
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            item.priority === 'alta'
+                              ? 'bg-rose-500 text-white animate-pulse'
+                              : item.priority === 'media'
+                              ? 'bg-blue-500/20 text-blue-300'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          Prioridade: {(item.priority || 'media').toUpperCase()}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          {new Date(item.createdAt).toLocaleString('pt-BR')}
+                        </span>
+                        <button
+                          onClick={() => triggerDeleteFeedback(item.id, item.username)}
+                          className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                          title="Excluir feedback permanentemente"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* User and Subject */}
+                    <div>
+                      <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                        <span>Aluno:</span>
+                        <span className="font-bold text-white bg-slate-800 px-2 py-0.5 rounded-md">
+                          {item.username}
+                        </span>
+                        {item.syncCode && (
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            (ID: {item.syncCode})
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-base font-black text-white">{item.title}</h4>
+                      <p className="text-xs text-slate-300 mt-2 leading-relaxed bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80">
+                        {item.description}
+                      </p>
+                    </div>
+
+                    {/* Official Admin Reply display if already present */}
+                    {item.adminReply && (
+                      <div className="p-3.5 rounded-2xl bg-teal-950/40 border border-teal-500/30 text-xs space-y-1">
+                        <div className="flex items-center justify-between text-teal-300 font-bold">
+                          <span>Resposta Oficial da Equipe:</span>
+                          <span className="text-[10px] text-teal-400/70 font-mono">
+                            {item.repliedAt ? new Date(item.repliedAt).toLocaleString('pt-BR') : ''}
+                          </span>
+                        </div>
+                        <p className="text-teal-100 text-xs leading-relaxed">{item.adminReply}</p>
+                      </div>
+                    )}
+
+                    {/* Actions and Status Bar */}
+                    <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-400">Status atual:</span>
+                        <select
+                          value={item.status}
+                          disabled={isSaving}
+                          onChange={(e) => handleUpdateFeedbackStatus(item.id, e.target.value as FeedbackStatus)}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-xl border cursor-pointer outline-none ${
+                            item.status === 'resolvido'
+                              ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
+                              : item.status === 'em_analise'
+                              ? 'bg-indigo-950 text-indigo-300 border-indigo-500/50'
+                              : item.status === 'pendente'
+                              ? 'bg-amber-950 text-amber-300 border-amber-500/50'
+                              : 'bg-slate-950 text-slate-400 border-slate-700'
+                          }`}
+                        >
+                          <option value="pendente">⏳ Pendente</option>
+                          <option value="em_analise">🔍 Em Análise</option>
+                          <option value="resolvido">✅ Resolvido</option>
+                          <option value="arquivado">📁 Arquivado</option>
+                        </select>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setReplyingFeedbackId(replyingFeedbackId === item.id ? null : item.id);
+                          setAdminReplyText(item.adminReply || '');
+                          setAdminReplyStatus(item.status === 'pendente' ? 'resolvido' : item.status);
+                        }}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600/20 hover:bg-teal-600 text-teal-300 hover:text-slate-950 text-xs font-bold border border-teal-500/30 transition-all cursor-pointer"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>{item.adminReply ? 'Editar Resposta' : 'Responder Aluno'}</span>
+                      </button>
+                    </div>
+
+                    {/* Inline Reply Box */}
+                    {replyingFeedbackId === item.id && (
+                      <div className="p-4 rounded-2xl bg-slate-950 border border-teal-500/40 space-y-3 animate-fadeIn">
+                        <h5 className="text-xs font-bold text-teal-300">
+                          Enviar Resposta Oficial para {item.username}:
+                        </h5>
+                        <textarea
+                          rows={3}
+                          value={adminReplyText}
+                          onChange={(e) => setAdminReplyText(e.target.value)}
+                          placeholder="Digite aqui a resposta ao estudante..."
+                          className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-400"
+                        />
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-400">Alterar status para:</span>
+                            <select
+                              value={adminReplyStatus}
+                              onChange={(e) => setAdminReplyStatus(e.target.value as FeedbackStatus)}
+                              className="text-xs px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-200"
+                            >
+                              <option value="resolvido">Resolvido</option>
+                              <option value="em_analise">Em Análise</option>
+                              <option value="pendente">Pendente</option>
+                            </select>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setReplyingFeedbackId(null)}
+                              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => handleUpdateFeedbackStatus(item.id, adminReplyStatus, adminReplyText)}
+                              className="px-4 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs cursor-pointer shadow-lg shadow-teal-500/30"
+                            >
+                              {isSaving ? 'Salvando...' : 'Salvar e Notificar'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Custom In-App Confirmation Modal (100% iframe compatible, replaces blocked window.confirm) */}
+      {confirmDialog && confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="relative w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div
+                className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                  confirmDialog.isDestructive
+                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                    : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                }`}
+              >
+                {confirmDialog.isDestructive ? (
+                  <AlertTriangle className="w-6 h-6 text-rose-400" />
+                ) : (
+                  <Info className="w-6 h-6 text-indigo-400" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-black text-white">{confirmDialog.title}</h3>
+                <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">{confirmDialog.message}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => confirmDialog.onConfirm()}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-lg flex items-center gap-1.5 ${
+                  confirmDialog.isDestructive
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+                }`}
+              >
+                {isSaving ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Processando...</span>
+                  </>
+                ) : (
+                  <span>{confirmDialog.confirmLabel}</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Progress & Account Detail Modal */}
+      {selectedUserDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <img
+                  src={selectedUserDetail.avatarUrl}
+                  alt={selectedUserDetail.username}
+                  className="w-12 h-12 rounded-2xl object-cover border border-slate-700"
+                />
+                <div>
+                  <h3 className="text-base font-black text-white">{selectedUserDetail.username}</h3>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    Código: {selectedUserDetail.syncCode}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedUserDetail(null)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 text-center">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Nível</span>
+                <span className="text-xl font-black text-white">{selectedUserDetail.level}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-center">
+                <span className="text-[10px] font-bold text-amber-300 uppercase block">XP Total</span>
+                <span className="text-xl font-black text-amber-400">{selectedUserDetail.xp}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-center">
+                <span className="text-[10px] font-bold text-cyan-300 uppercase block">Diamantes</span>
+                <span className="text-xl font-black text-cyan-400">{selectedUserDetail.gems} 💎</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-center">
+                <span className="text-[10px] font-bold text-rose-300 uppercase block">Corações</span>
+                <span className="text-xl font-black text-rose-400">{selectedUserDetail.hearts} ❤️</span>
+              </div>
+            </div>
+
+            {/* Progress Details */}
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Sequência (Ofensiva):</span>
+                <strong className="text-amber-400 flex items-center gap-1 font-mono">
+                  <Flame className="w-3.5 h-3.5 fill-amber-400" /> {selectedUserDetail.streak} dias
+                </strong>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Lições Concluídas:</span>
+                <strong className="text-white font-mono">{selectedUserDetail.completedLessonsCount || 0} lições</strong>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Sinais Perfeitos na Câmera:</span>
+                <strong className="text-emerald-400 font-mono">{selectedUserDetail.perfectSignsCount || 0} sinais</strong>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Sinais Ensinados à IA:</span>
+                <strong className="text-cyan-400 font-mono">{selectedUserDetail.taughtSignsCount || 0} sinais</strong>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Título Ativo:</span>
+                <strong className="text-purple-300">{selectedUserDetail.activeTitle || 'Aprendiz Curioso'}</strong>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Última Atividade:</span>
+                <span className="text-slate-400">{selectedUserDetail.lastActive}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedUserDetail(null);
+                  triggerDeleteUser(selectedUserDetail.key, selectedUserDetail.username);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Excluir Cadastro</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedUserDetail(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
