@@ -106,7 +106,7 @@ export const LibrasDexView: React.FC<LibrasDexViewProps> = ({
         </div>
 
         {/* Categories scrollable pill list */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth pb-1">
           {categories.map((cat) => (
             <button
               key={cat.id}
@@ -114,7 +114,7 @@ export const LibrasDexView: React.FC<LibrasDexViewProps> = ({
                 audio.playClick();
                 setSelectedCategory(cat.id);
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex-shrink-0 ${
                 selectedCategory === cat.id
                   ? 'bg-indigo-600 text-white font-black shadow-md shadow-indigo-600/30'
                   : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
@@ -127,7 +127,7 @@ export const LibrasDexView: React.FC<LibrasDexViewProps> = ({
       </div>
 
       {/* Grid of Signs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-4">
         {filteredSigns.map((sign) => {
           const isMastered = masteredSignIds.includes(sign.id);
           const isCommunity = Boolean(sign.isCustom || sign.id.startsWith('taught_') || sign.imageUrl);
@@ -139,7 +139,7 @@ export const LibrasDexView: React.FC<LibrasDexViewProps> = ({
                 audio.playClick();
                 setSelectedSign(sign);
               }}
-              className="group p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-indigo-500/60 hover:bg-slate-850 transition-all cursor-pointer shadow-lg flex flex-col justify-between"
+              className="group p-2.5 sm:p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-indigo-500/60 hover:bg-slate-850 transition-all cursor-pointer shadow-lg flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -203,8 +203,8 @@ export const LibrasDexView: React.FC<LibrasDexViewProps> = ({
 
       {/* Sign Detail Modal */}
       {selectedSign && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl p-4 sm:p-6 shadow-2xl text-white max-h-[90dvh] overflow-y-auto">
             
             <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
               <div className="flex items-center gap-2">

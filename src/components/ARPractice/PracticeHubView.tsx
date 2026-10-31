@@ -62,8 +62,8 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
   return (
     <div className="w-full flex-1 flex flex-col">
       {/* Top Main Mode Navigator */}
-      <div className="bg-slate-900/90 border-b border-slate-800 backdrop-blur-md sticky top-16 z-30 px-3 sm:px-4 py-2.5">
-        <div className="max-w-4xl mx-auto flex items-center justify-start gap-2 overflow-x-auto no-scrollbar px-1">
+      <div className="bg-slate-900/95 border-b border-slate-800 backdrop-blur-md sticky top-12 sm:top-16 z-30 px-2.5 sm:px-4 py-2">
+        <div className="max-w-4xl mx-auto flex items-center justify-start gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth px-1">
           
           {/* Tab 1: Expressões Faciais & RA */}
           <button
@@ -71,7 +71,7 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
               audio.playClick();
               setActiveMode('facial');
             }}
-            className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 whitespace-nowrap flex-shrink-0 ${
               activeMode === 'facial'
                 ? 'bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-600 text-white shadow-lg shadow-indigo-500/30 scale-102'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
@@ -79,7 +79,7 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
           >
             <Smile className="w-4 h-4 text-amber-300" />
             <span>Expressões Faciais & RA</span>
-            <span className="text-[10px] uppercase font-black px-1.5 py-0.2 rounded-full bg-black/30 text-amber-300">
+            <span className="text-[9px] sm:text-[10px] uppercase font-black px-1.5 py-0.2 rounded-full bg-black/30 text-amber-300">
               Prática
             </span>
           </button>
@@ -90,7 +90,7 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
               audio.playClick();
               setActiveMode('teach_facial');
             }}
-            className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 whitespace-nowrap flex-shrink-0 ${
               activeMode === 'teach_facial'
                 ? 'bg-gradient-to-r from-blue-500 via-indigo-600 to-purple-600 text-white shadow-lg shadow-blue-500/30 scale-102'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
@@ -98,7 +98,7 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
           >
             <Sparkles className="w-4 h-4 text-cyan-300" />
             <span>Ensinar Expressões à IA</span>
-            <span className="text-[10px] uppercase font-black px-1.5 py-0.2 rounded-full bg-cyan-400 text-slate-950">
+            <span className="text-[9px] sm:text-[10px] uppercase font-black px-1.5 py-0.2 rounded-full bg-cyan-400 text-slate-950">
               Novo
             </span>
           </button>
@@ -109,7 +109,7 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
               audio.playClick();
               setActiveMode('signs_ar');
             }}
-            className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 whitespace-nowrap flex-shrink-0 ${
               activeMode === 'signs_ar'
                 ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 shadow-lg shadow-cyan-500/30 scale-102'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
@@ -125,7 +125,7 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
               audio.playClick();
               setActiveMode('teach_ai');
             }}
-            className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 whitespace-nowrap flex-shrink-0 ${
               activeMode === 'teach_ai'
                 ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 shadow-lg shadow-emerald-500/30 scale-102'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'

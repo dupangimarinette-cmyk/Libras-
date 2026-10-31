@@ -50,6 +50,17 @@ export interface RealtimeFeedResponse {
   timestamp: string;
   totalUsers: number;
   stats: AdminRealtimeStats;
+  diagnostics?: {
+    persistenceMode: 'firestore' | 'file';
+    persistenceNote?: string;
+    projectIdSecret?: boolean;
+    serviceAccountSecret?: boolean;
+    totalRecords: number;
+    hiddenRecords: number;
+    noStatsRecords: number;
+    listed: number;
+    sseClients: number;
+  };
   users: AdminUserRecord[];
   events: AdminRealtimeEvent[];
   pendingFeedbacksCount: number;

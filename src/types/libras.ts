@@ -482,9 +482,20 @@ export interface FacialTrackingState {
   detectedExpressions: string[];
 }
 
+/** Trajetória gravada de um sinal em movimento (ver services/motionRecognizer.ts). */
+export interface MotionTemplate {
+  v: 1;
+  durationMs: number;
+  pathLength: number;   // distância percorrida pela palma, em "tamanhos de mão"
+  shapeTravel: number;  // quanto o formato da mão mudou ao longo do sinal
+  isDynamic: boolean;   // false = sinal parado
+  points: number[][];   // N pontos: [cx, cy, ...42 coordenadas da mão relativas ao pulso]
+}
+
 export interface TaughtSignSample {
   id: string;
   timestamp: string;
+  motion?: MotionTemplate;
   handAnalysis?: {
     thumb: boolean;
     index: boolean;

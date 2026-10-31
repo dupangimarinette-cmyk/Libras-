@@ -52,7 +52,8 @@ import {
   UserMinus,
 } from 'lucide-react';
 import { contentService } from '../../services/contentService';
-import { adminService, AdminUserRecord } from '../../services/adminService';
+import { adminService, AdminUserRecord, RealtimeFeedResponse } from '../../services/adminService';
+import { adminFetch } from '../../services/adminFetch';
 import { SuspectAccountsPanel } from './SuspectAccountsPanel';
 import { db } from '../../services/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -169,6 +170,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [realtimeEvents, setRealtimeEvents] = useState<AdminRealtimeEvent[]>([]);
   const [userSortOrder, setUserSortOrder] = useState<'recent' | 'oldest' | 'xp' | 'lessons'>('recent');
   const [lastSyncTime, setLastSyncTime] = useState<string>(new Date().toLocaleTimeString('pt-BR'));
+  const [feedDiag, setFeedDiag] = useState<RealtimeFeedResponse['diagnostics'] | null>(null);
+  const [feedFailed, setFeedFailed] = useState(false);
+  const [feedLoaded, setFeedLoaded] = useState(false);
 
   // --- MODULES & ACTIVITIES MODALS / FORM STATES ---
   const [expandedModuleId, setExpandedModuleId] = useState<string | null>(null);
@@ -247,6 +251,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       const sseUrl = adminSession?.token ? `/api/admin/realtime-stream?token=${encodeURIComponent(adminSession.token)}` : '/api/admin/realtime-stream';
       eventSource = new EventSource(sseUrl);
+      eventSource.onopen = () => loadAdminAuxData(true); // (re)conectou: busca o que perdeu enquanto estava fora
       eventSource.onmessage = (e) => {
         try {
           const parsed = JSON.parse(e.data);
@@ -321,6 +326,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         ? feedData.users
         : await adminService.fetchUsers();
 
+      setFeedLoaded(true);
+      setFeedFailed(!feedData);
+      setFeedDiag(feedData?.diagnostics || null);
       if (feedData?.stats) {
         setRealtimeStats(feedData.stats);
       } else {
@@ -1143,21 +1151,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-6 pb-28 text-white space-y-6">
+    <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-28 text-white space-y-5 sm:space-y-6 overflow-x-hidden">
       
       {/* Toast Notification with Save Confirmation */}
       {feedbackMsg && (
         <div
-          className={`fixed top-16 right-4 z-50 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border animate-slideDown max-w-md ${
+          className={`fixed top-16 right-4 z-50 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl shadow-2xl flex items-center gap-2 sm:gap-3 border animate-slideDown max-w-[90vw] sm:max-w-md ${
             feedbackMsg.type === 'success'
               ? 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200'
               : 'bg-rose-950/95 border-rose-500/50 text-rose-200'
           }`}
         >
           {feedbackMsg.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+            <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 flex-shrink-0" />
           ) : (
-            <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400 flex-shrink-0" />
           )}
           <span className="text-xs sm:text-sm font-bold">{feedbackMsg.text}</span>
           <button
@@ -1170,39 +1178,82 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Admin Header with Cloud Sync Badge */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-indigo-500/30 shadow-2xl relative overflow-hidden">
+      <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-indigo-500/30 shadow-2xl relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-600/30 text-white">
-              <Shield className="w-6 h-6" />
+          <div className="flex items-center gap-3 sm:gap-3.5">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-600/30 text-white flex-shrink-0">
+              <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-white">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <h1 className="text-lg sm:text-2xl font-black text-white">
                   Painel Administrativo LibrasGo
                 </h1>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
-                  <Cloud className="w-3 h-3 text-cyan-400 animate-pulse" /> Sincronização em Nuvem Ativa
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 sm:px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                  <Cloud className="w-3 h-3 text-cyan-400 animate-pulse" /> Sincronização Ativa
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-300 mt-1">
                 Todas as alterações são salvas permanentemente no banco compartilhado e sincronizadas em tempo real para celulares, tablets e computadores.
               </p>
+              <p className={`text-[11px] sm:text-xs mt-1.5 font-bold ${
+                feedFailed ? 'text-rose-300' : feedDiag?.persistenceMode === 'firestore' ? 'text-emerald-300' : 'text-amber-300'
+              }`}>
+                {!feedLoaded
+                  ? 'Verificando o banco de dados...'
+                  : feedFailed
+                    ? '⚠️ Não consegui falar com o servidor. Entre de novo como admin.'
+                    : !feedDiag
+                      ? '⚠️ Servidor sem diagnóstico: o server.ts novo ainda não foi publicado.'
+                      : feedDiag.persistenceMode === 'firestore'
+                        ? `✅ Banco: Firestore (dados salvos na nuvem) · ${feedDiag.listed} alunos listados · ${feedDiag.totalRecords} registros`
+                        : `⚠️ Banco: arquivo do servidor (pode se perder ao republicar) · ${feedDiag.listed} alunos listados · ${feedDiag.totalRecords} registros`}
+              </p>
+              {feedDiag?.persistenceMode === 'file' && (
+                <p className="text-[11px] text-slate-300 mt-1 leading-snug">
+                  Motivo: {feedDiag.persistenceNote || 'o servidor não conseguiu conectar ao Firestore'} · Secret FIREBASE_PROJECT_ID: {feedDiag.projectIdSecret ? 'definido' : 'NÃO definido'} · Secret FIREBASE_SERVICE_ACCOUNT: {feedDiag.serviceAccountSecret ? 'definido' : 'não definido'}
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => {
                 audio.playClick();
                 contentService.fetchSharedContent();
                 showToast('Banco de dados compartilhado recarregado e sincronizado!');
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 hover:text-white border border-slate-700/80 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 hover:text-white border border-slate-700/80 transition-all cursor-pointer"
               title="Forçar recarga imediata do banco compartilhado"
             >
               <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Sincronizar Agora</span>
+              <span>Sincronizar</span>
+            </button>
+            <button
+              onClick={async () => {
+                audio.playClick();
+                try {
+                  const res = await adminFetch('/api/admin/backup');
+                  if (!res.ok) throw new Error('falhou');
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `librasgo-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
+                  showToast('Backup baixado! Guarde o arquivo em local seguro.');
+                } catch {
+                  showToast('Não consegui baixar o backup. Entre de novo como admin.');
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 hover:text-white border border-slate-700/80 transition-all cursor-pointer"
+              title="Baixar uma cópia de todos os dados (alunos e conteúdo)"
+            >
+              <span>💾 Backup</span>
             </button>
 
             {/* Live Monitoring & Notifications Center */}
@@ -1213,7 +1264,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   setShowNotificationsDropdown(!showNotificationsDropdown);
                   setHasNewAlert(false);
                 }}
-                className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                className={`relative flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                   hasNewAlert
                     ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/30 animate-pulse'
                     : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
@@ -1228,7 +1279,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
 
               {showNotificationsDropdown && (
-                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-700/80 rounded-2xl p-3.5 shadow-2xl z-40 space-y-3 animate-fadeIn">
+                <div className="fixed inset-x-3 top-28 sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 mt-2 sm:w-80 bg-slate-900 border border-slate-700/80 rounded-2xl p-3.5 shadow-2xl z-40 space-y-3 animate-fadeIn">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                     <span className="text-xs font-black text-white flex items-center gap-1.5">
                       <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
@@ -1248,32 +1299,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="space-y-2 max-h-60 overflow-y-auto pr-1 text-xs">
                     <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
                       <div className="flex items-center justify-between text-slate-400 text-[10px]">
-                        <span>Últimos Cadastros:</span>
-                        <strong className="text-indigo-300">{users.length} total</strong>
+                        <span>Cadastros Reais</span>
+                        <span className="text-emerald-400 font-bold">{users.length} alunos</span>
                       </div>
-                      <div className="mt-1 space-y-1">
-                        {users.slice(0, 3).map((u) => (
-                          <div key={u.key} className="flex items-center justify-between text-[11px]">
-                            <span className="font-bold text-white truncate max-w-[130px]">{u.username}</span>
-                            <span className="text-emerald-400 font-mono text-[10px]">Nível {u.level} • {u.xp} XP</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
-                      <div className="flex items-center justify-between text-slate-400 text-[10px]">
-                        <span>Feedbacks Pendentes:</span>
-                        <strong className="text-amber-400">
-                          {feedbacksList.filter((f) => f.status === 'pendente').length} pendente(s)
-                        </strong>
-                      </div>
-                      <div className="mt-1 space-y-1">
-                        {feedbacksList.slice(0, 3).map((f) => (
-                          <div key={f.id} className="text-[11px] truncate text-slate-300">
-                            <strong className="text-amber-300 font-normal">[{f.type}]</strong> {f.title}
-                          </div>
-                        ))}
+                      <div className="mt-1 text-[10px] text-slate-500 leading-snug">
+                        {feedFailed
+                          ? 'Não consegui carregar o feed do servidor. Verifique a sessão de admin.'
+                          : feedDiag
+                            ? `Atualizado ${lastSyncTime} · banco: ${feedDiag.persistenceMode === 'firestore' ? 'Firestore' : 'arquivo'} · ${feedDiag.totalRecords} registros, ${feedDiag.hiddenRecords} ocultos (robô/teste), ${feedDiag.noStatsRecords} sem dados`
+                            : `Atualizado ${lastSyncTime}`}
                       </div>
                     </div>
                   </div>
@@ -1286,7 +1320,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 audio.playClick();
                 onSwitchToLearner();
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
             >
               <GraduationCap className="w-3.5 h-3.5" />
               <span>Modo Aluno</span>
@@ -1297,7 +1331,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 audio.playClick();
                 onLogoutAdmin();
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white text-xs font-bold border border-rose-500/30 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white text-xs font-bold border border-rose-500/30 transition-all cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Sair</span>
@@ -1307,7 +1341,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-slate-800">
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-2 no-scrollbar scroll-smooth border-b border-slate-800">
         {[
           { id: 'social', label: '⚔️ Amigos & Desafios', icon: Swords, badge: uniqueChallenges.length },
           { id: 'users', label: 'Alunos / Usuários', icon: Users, badge: users.length },
@@ -1328,7 +1362,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 audio.playClick();
                 setActiveTab(tab.id as AdminTab);
               }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
                 isActive
                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40'
                   : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'

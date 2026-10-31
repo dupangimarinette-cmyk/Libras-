@@ -177,7 +177,7 @@ export const RedeemView: React.FC<RedeemViewProps> = ({
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
               Seu Saldo Atual:
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-black">
                 <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
                 <span>{userStats.gems} 💎</span>
@@ -460,7 +460,7 @@ export const RedeemView: React.FC<RedeemViewProps> = ({
       {/* ==================================================================== */}
       {successResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-          <div className="relative w-full max-w-md rounded-3xl bg-slate-900 border-2 border-purple-500/50 p-6 sm:p-7 shadow-2xl text-white text-center space-y-5 overflow-hidden">
+          <div className="relative w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-3xl bg-slate-900 border-2 border-purple-500/50 p-6 sm:p-7 shadow-2xl text-white text-center space-y-5">
             
             {/* Background glowing flare */}
             <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full blur-3xl pointer-events-none opacity-40 bg-gradient-to-tr from-purple-600 via-pink-500 to-amber-400" />

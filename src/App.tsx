@@ -1194,6 +1194,15 @@ export default function App() {
                 return next;
               });
             }}
+            onEquipFrame={(frameId) => {
+              // Antes este botão não fazia nada: o App nunca passava onEquipFrame para o perfil.
+              updateUserStats((prev) => {
+                const next = { ...prev, equippedFrame: frameId };
+                storageService.saveUserStats(next);
+                storageService.syncWithCloud(next).catch(() => {});
+                return next;
+              });
+            }}
           />
         )}
 

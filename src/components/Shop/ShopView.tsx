@@ -298,7 +298,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
               audio.playClick();
               setActiveTab('mascots');
             }}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
               activeTab === 'mascots'
                 ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
@@ -312,7 +312,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
               audio.playClick();
               setActiveTab('accessories');
             }}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
               activeTab === 'accessories'
                 ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 shadow-lg shadow-emerald-500/30'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
@@ -326,7 +326,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
               audio.playClick();
               setActiveTab('titles');
             }}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
               activeTab === 'titles'
                 ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-lg shadow-purple-500/30'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
@@ -340,7 +340,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
               audio.playClick();
               setActiveTab('name_colors');
             }}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
               activeTab === 'name_colors'
                 ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/30'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
@@ -354,7 +354,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
               audio.playClick();
               setActiveTab('chests');
             }}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
               activeTab === 'chests'
                 ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
@@ -368,7 +368,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
               audio.playClick();
               setActiveTab('powerups');
             }}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
               activeTab === 'powerups'
                 ? 'bg-gradient-to-r from-rose-500 to-red-600 text-white shadow-lg shadow-rose-500/30'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
@@ -382,7 +382,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
               audio.playClick();
               setActiveTab('special_tracks');
             }}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
               activeTab === 'special_tracks'
                 ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
@@ -1118,7 +1118,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
       {/* How to Earn Diamonds Modal */}
       {showEarnInfoModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-cyan-400" />

@@ -1,6 +1,7 @@
 import { TaughtSign, TaughtSignSample, FacialTrackingState } from '../types/libras';
 import { Landmark } from './handTracker';
 import { userFetch } from './userAuth';
+import { MotionBuffer, evaluateMotion } from './motionRecognizer';
 
 const STORAGE_TAUGHT_SIGNS = 'librasgo_user_taught_signs';
 
@@ -9,6 +10,8 @@ export interface AISignEvaluationResult {
   isMatch: boolean;
   handScore: number;
   faceScore: number;
+  /** Nota (0-100) do movimento, quando o sinal gravado tem movimento. */
+  motionScore?: number;
   matchedSampleId?: string;
   feedbackAdvice: string;
   detectedFeatures: string[];
@@ -175,7 +178,9 @@ class AISignLearner {
   public evaluateAgainstSign(
     currentLandmarks: Landmark[] | null,
     currentFace: FacialTrackingState | null,
-    taughtSign: TaughtSign
+    taughtSign: TaughtSign,
+    motionBuffer?: MotionBuffer,
+    now: number = typeof performance !== 'undefined' ? performance.now() : Date.now()
   ): AISignEvaluationResult {
     if (!taughtSign || taughtSign.samples.length === 0) {
       return {
@@ -191,6 +196,7 @@ class AISignLearner {
     let bestSampleConfidence = 0;
     let bestHandScore = 0;
     let bestFaceScore = 0;
+    let bestMotionScore: number | undefined;
     let bestSampleId = taughtSign.samples[0].id;
     const adviceList: string[] = [];
     const detectedFeatures: string[] = [];
@@ -198,9 +204,24 @@ class AISignLearner {
     for (const sample of taughtSign.samples) {
       let handScore = 100;
       let faceScore = 100;
+      let sampleMotionScore: number | undefined;
 
-      // 1. Hand Landmarks comparison
-      if (sample.handLandmarks && sample.handLandmarks.length > 0) {
+      // 0. Sinal em movimento: compara a trajetória dos últimos instantes (DTW), não um quadro parado.
+      const isMotionSample = Boolean(sample.motion && sample.motion.isDynamic);
+      if (isMotionSample) {
+        if (!motionBuffer) {
+          handScore = 0;
+        } else {
+          const me = evaluateMotion(motionBuffer, sample.motion!, now);
+          handScore = me.score;
+          sampleMotionScore = me.score;
+          if (me.isMatch) detectedFeatures.push('Movimento do sinal correto ✓');
+          else adviceList.push(me.advice);
+        }
+      }
+
+      // 1. Hand Landmarks comparison (sinais parados)
+      if (!isMotionSample && sample.handLandmarks && sample.handLandmarks.length > 0) {
         if (!currentLandmarks || currentLandmarks.length === 0) {
           handScore = 0;
           adviceList.push('Posicione sua mão na frente da câmera');
@@ -272,7 +293,7 @@ class AISignLearner {
       }
 
       // Weighted Total Confidence
-      const hasHandRequirement = Boolean(sample.handLandmarks && sample.handLandmarks.length > 0);
+      const hasHandRequirement = isMotionSample || Boolean(sample.handLandmarks && sample.handLandmarks.length > 0);
       const hasFaceRequirement = Boolean(sample.facialFeatures && (sample.facialFeatures.eyebrowsState !== 'neutral' || sample.facialFeatures.headMovement !== 'neutral'));
 
       let sampleConfidence = 0;
@@ -290,6 +311,7 @@ class AISignLearner {
         bestSampleConfidence = sampleConfidence;
         bestHandScore = handScore;
         bestFaceScore = faceScore;
+        bestMotionScore = sampleMotionScore;
         bestSampleId = sample.id;
       }
     }
@@ -309,6 +331,7 @@ class AISignLearner {
       isMatch,
       handScore: bestHandScore,
       faceScore: bestFaceScore,
+      motionScore: bestMotionScore,
       matchedSampleId: bestSampleId,
       feedbackAdvice,
       detectedFeatures,

@@ -67,38 +67,38 @@ export const PathView: React.FC<PathViewProps> = ({
     return thisIndex > firstIncompleteIndex;
   };
 
-  // Horizontal zigzag offset calculation for Duolingo path
+  // Horizontal zigzag offset calculation for Duolingo path (safe on mobile 320px-390px)
   const getZigZagOffset = (index: number) => {
     const cycle = index % 4;
     switch (cycle) {
       case 0:
         return 'translate-x-0';
       case 1:
-        return '-translate-x-8 sm:-translate-x-14 md:-translate-x-16';
+        return '-translate-x-5 sm:-translate-x-12 md:-translate-x-16';
       case 2:
         return 'translate-x-0';
       case 3:
-        return 'translate-x-8 sm:translate-x-14 md:translate-x-16';
+        return 'translate-x-5 sm:translate-x-12 md:translate-x-16';
       default:
         return 'translate-x-0';
     }
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-6 pb-24 text-white">
+    <div className="w-full max-w-2xl mx-auto px-3 sm:px-4 py-5 sm:py-6 pb-28 text-white">
       
       {/* Daily Banner / Community Greeting */}
-      <div className="mb-8 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-emerald-950/80 via-slate-900 to-teal-950/80 border border-emerald-500/30 shadow-xl flex items-center justify-between gap-4">
+      <div className="mb-6 sm:mb-8 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-emerald-950/80 via-slate-900 to-teal-950/80 border border-emerald-500/30 shadow-xl flex items-center justify-between gap-3 sm:gap-4">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs uppercase font-extrabold tracking-wider text-emerald-400">
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+            <span className="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider text-emerald-400">
               Trilha Diária • Nível {userStats.level}
             </span>
             <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold text-[10px] flex items-center gap-1">
               <Flame className="w-3 h-3 fill-amber-400" /> {userStats.streak} dias seguidos
             </span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
+          <h1 className="text-lg sm:text-2xl font-black text-white leading-tight">
             Continue sua jornada em Libras!
           </h1>
           <p className="text-slate-300 text-xs mt-1">
@@ -119,7 +119,7 @@ export const PathView: React.FC<PathViewProps> = ({
 
       {/* DEDICATED FACIAL EXPRESSIONS & NON-MANUAL MODULE BANNER */}
       {onOpenFacialPractice && (
-        <div className="mb-8 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-indigo-900 via-purple-900 to-pink-900 text-white shadow-xl shadow-purple-950/30 border border-purple-500/40 relative overflow-hidden">
+        <div className="mb-6 sm:mb-8 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-indigo-900 via-purple-900 to-pink-900 text-white shadow-xl shadow-purple-950/30 border border-purple-500/40 relative overflow-hidden">
           <div className="absolute top-0 right-0 translate-x-4 -translate-y-4 w-32 h-32 rounded-full bg-purple-500/10 blur-xl pointer-events-none" />
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
@@ -132,23 +132,23 @@ export const PathView: React.FC<PathViewProps> = ({
                   {(userStats.completedFacialExerciseIds || []).length} / 11 Desafios Concluídos
                 </span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black leading-tight flex items-center gap-2 text-white">
+              <h2 className="text-lg sm:text-2xl font-black leading-tight flex items-center gap-2 text-white">
                 <span>Expressões Faciais & Movimentos de Cabeça</span>
-                <Sparkles className="w-5 h-5 text-amber-300" />
+                <Sparkles className="w-5 h-5 text-amber-300 flex-shrink-0" />
               </h2>
               <p className="text-xs sm:text-sm text-purple-200 mt-1 max-w-xl leading-relaxed">
                 Pratique interrogativas, afirmação, negação e intensidade com a câmera frontal, molde facial holográfico e desbloqueie acessórios para a Librinha.
               </p>
             </div>
 
-            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
               {onOpenTeachFacial && (
                 <button
                   onClick={() => {
                     audio.playClick();
                     onOpenTeachFacial();
                   }}
-                  className="px-4 py-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-black text-xs sm:text-sm shadow-xl shadow-indigo-600/30 hover:scale-103 active:scale-97 transition-all cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap"
+                  className="flex-1 sm:flex-none px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-black text-xs sm:text-sm shadow-xl shadow-indigo-600/30 hover:scale-103 active:scale-97 transition-all cursor-pointer flex items-center justify-center gap-2"
                   title="Ensinar novas expressões faciais à IA para praticar na trilha"
                 >
                   <Sparkles className="w-4 h-4 text-cyan-300" />
@@ -161,7 +161,7 @@ export const PathView: React.FC<PathViewProps> = ({
                   audio.playClick();
                   onOpenFacialPractice();
                 }}
-                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/30 hover:scale-103 active:scale-97 transition-all cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap"
+                className="flex-1 sm:flex-none px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/30 hover:scale-103 active:scale-97 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <Smile className="w-4 h-4 fill-slate-950" />
                 <span>Abrir Módulo Facial</span>

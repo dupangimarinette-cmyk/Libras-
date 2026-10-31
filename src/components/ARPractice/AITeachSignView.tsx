@@ -35,6 +35,7 @@ import { opticalTracker } from '../../services/opticalHandTracker';
 import { analyzeFingers } from '../../services/handTracker';
 import { facialTracker } from '../../services/facialTracker';
 import { audio } from '../../services/audioService';
+import { MotionBuffer, buildMotionTemplate } from '../../services/motionRecognizer';
 
 interface AITeachSignViewProps {
   userStats: UserStats;
@@ -66,6 +67,8 @@ export const AITeachSignView: React.FC<AITeachSignViewProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Últimos segundos de movimento da mão (alimenta a gravação e a revisão de sinais em movimento)
+  const motionBufferRef = useRef(new MotionBuffer(6000));
 
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -181,10 +184,11 @@ export const AITeachSignView: React.FC<AITeachSignViewProps> = ({
         // Hand analysis
         const hand = opticalTracker.detectHand(videoRef.current);
         setLiveHandDetected(Boolean(hand && hand.length >= 21));
+        motionBufferRef.current.push(performance.now(), hand);
 
         // In Review Mode: Real-time comparison with saved sign samples
         if (activeSubTab === 'review' && selectedReviewSign && !reviewSuccess) {
-          const evalResult = aiSignLearner.evaluateAgainstSign(hand, face, selectedReviewSign);
+          const evalResult = aiSignLearner.evaluateAgainstSign(hand, face, selectedReviewSign, motionBufferRef.current, performance.now());
           setReviewEvaluation(evalResult);
 
           if (evalResult.isMatch) {
@@ -304,28 +308,37 @@ export const AITeachSignView: React.FC<AITeachSignViewProps> = ({
   const beginMotionSampling = () => {
     audio.playClick();
     const durationMs = 3000;
-    const intervalMs = 400;
-    const totalFrames = Math.floor(durationMs / intervalMs);
-    let framesCaptured = 0;
-    const captured: TaughtSignSample[] = [];
+    const startT = performance.now();
+    setLiveMotionProgress(0);
 
-    const samplingInterval = setInterval(() => {
-      framesCaptured++;
-      const pct = Math.round((framesCaptured / totalFrames) * 100);
+    const progressTimer = setInterval(() => {
+      const pct = Math.min(100, Math.round(((performance.now() - startT) / durationMs) * 100));
       setLiveMotionProgress(pct);
+      if (pct < 100) return;
 
-      const samp = extractCurrentSample();
-      captured.push(samp);
+      clearInterval(progressTimer);
+      const endT = performance.now();
+      setIsRecordingLiveMotion(false);
+      setLiveMotionProgress(0);
 
-      if (framesCaptured >= totalFrames) {
-        clearInterval(samplingInterval);
-        setIsRecordingLiveMotion(false);
-        setLiveMotionProgress(0);
-        audio.playSuccess();
-        setRecordedSamples((prev) => [...prev, ...captured]);
-        showToast('success', `${captured.length} quadros de movimento e expressão facial registrados com sucesso!`);
+      // Trajetória contínua da mão durante os 3 segundos (e não mais quadros soltos).
+      const template = buildMotionTemplate(motionBufferRef.current.since(startT), startT, endT);
+      if (!template) {
+        audio.playClick();
+        showToast('error', 'Não consegui acompanhar sua mão durante toda a gravação. Mantenha a mão visível e tente de novo.');
+        return;
       }
-    }, intervalMs);
+
+      const sample = extractCurrentSample();
+      audio.playSuccess();
+      if (template.isDynamic) {
+        setRecordedSamples((prev) => [...prev, { ...sample, motion: template }]);
+        showToast('success', 'Movimento do sinal gravado! A IA vai reconhecer a trajetória da mão.');
+      } else {
+        setRecordedSamples((prev) => [...prev, sample]);
+        showToast('success', 'Não detectei movimento: salvei como sinal parado. Para sinais com movimento, mexa a mão durante os 3 segundos.');
+      }
+    }, 100);
   };
 
   // MODO 2: CAPTURA POR IMAGEM / FOTO INSTANTÂNEA
@@ -921,6 +934,11 @@ export const AITeachSignView: React.FC<AITeachSignViewProps> = ({
                       }`}>
                         {reviewEvaluation?.confidence || 0}%
                       </span>
+                      {reviewEvaluation?.motionScore !== undefined && (
+                        <span className="text-[10px] font-mono text-slate-400 block">
+                          Movimento: {reviewEvaluation.motionScore}%
+                        </span>
+                      )}
                     </div>
                   </div>
 

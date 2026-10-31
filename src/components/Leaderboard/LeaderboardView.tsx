@@ -267,7 +267,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
       {mainTab === 'global' && (
         <div className="space-y-6 animate-fadeIn">
           {/* League Selection Tabs */}
-          <div className="flex items-center justify-between gap-1 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-1 p-1 sm:p-1.5 bg-slate-900 border border-slate-800 rounded-2xl overflow-x-auto no-scrollbar scroll-smooth">
             {leagues.map((lg) => {
               const isActive = selectedLeague === lg.name;
               return (
@@ -277,7 +277,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                     audio.playClick();
                     setSelectedLeague(lg.name);
                   }}
-                  className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap ${
+                  className={`flex-1 py-1.5 sm:py-2 px-1.5 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap flex-shrink-0 ${
                     isActive
                       ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black shadow-md shadow-amber-500/20'
                       : 'text-slate-400 hover:text-white'
@@ -291,7 +291,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
           </div>
 
           {/* Season Countdown Banner & Real Users Security Badge */}
-          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-md">
+          <div className="p-3.5 sm:p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-md">
             <div className="flex items-center gap-2 text-xs text-slate-300">
               <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
               <span>A temporada semanal termina em: <strong>2 dias e 14 horas</strong></span>
@@ -303,7 +303,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
           </div>
 
           {/* Top 3 Podium Cards */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 items-end pt-6">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-3 items-end pt-5 sm:pt-6">
             
             {/* 2nd Place */}
             {top2 && (
@@ -312,16 +312,16 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                   <img
                     src={top2.avatar}
                     alt={top2.name}
-                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-slate-300 object-cover shadow-lg"
+                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-slate-300 object-cover shadow-lg"
                   />
-                  <span className="absolute -bottom-2 inset-x-0 mx-auto w-6 h-6 rounded-full bg-slate-300 text-slate-950 font-black text-xs flex items-center justify-center">
+                  <span className="absolute -bottom-1.5 inset-x-0 mx-auto w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-300 text-slate-950 font-black text-[10px] sm:text-xs flex items-center justify-center">
                     2
                   </span>
                 </div>
-                <div className="w-full bg-slate-900 border border-slate-700/80 rounded-2xl p-2.5 sm:p-3 text-center h-28 flex flex-col justify-between">
-                  <span className="text-xs font-bold truncate block">{top2.name.split(' ')[0]}</span>
-                  <span className="text-xs font-black text-slate-300">{top2.xp} XP</span>
-                  <span className="text-[10px] text-amber-400 font-bold flex items-center justify-center gap-0.5">
+                <div className="w-full bg-slate-900 border border-slate-700/80 rounded-2xl p-2 sm:p-3 text-center min-h-[6.5rem] sm:h-28 flex flex-col justify-between">
+                  <span className="text-[11px] sm:text-xs font-bold truncate block">{top2.name.split(' ')[0]}</span>
+                  <span className="text-[11px] sm:text-xs font-black text-slate-300">{top2.xp} XP</span>
+                  <span className="text-[9px] sm:text-[10px] text-amber-400 font-bold flex items-center justify-center gap-0.5">
                     <Flame className="w-3 h-3 fill-amber-400" /> {top2.streak}d
                   </span>
                 </div>
@@ -330,24 +330,24 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
 
             {/* 1st Place (Trophy Leader) */}
             {top1 && (
-              <div className="flex flex-col items-center -mt-6">
+              <div className="flex flex-col items-center -mt-5 sm:-mt-6">
                 <div className="relative mb-2">
-                  <div className="absolute -top-6 inset-x-0 mx-auto flex justify-center">
-                    <Trophy className="w-6 h-6 text-yellow-400 animate-bounce" />
+                  <div className="absolute -top-5 sm:-top-6 inset-x-0 mx-auto flex justify-center">
+                    <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-400 animate-bounce" />
                   </div>
                   <img
                     src={top1.avatar}
                     alt={top1.name}
-                    className="w-18 h-18 sm:w-20 sm:h-20 rounded-full border-4 border-yellow-400 object-cover shadow-xl shadow-yellow-500/20 ring-4 ring-yellow-400/20"
+                    className="w-14 h-14 sm:w-20 sm:h-20 rounded-full border-3 sm:border-4 border-yellow-400 object-cover shadow-xl shadow-yellow-500/20 ring-2 sm:ring-4 ring-yellow-400/20"
                   />
-                  <span className="absolute -bottom-2 inset-x-0 mx-auto w-7 h-7 rounded-full bg-yellow-400 text-slate-950 font-black text-sm flex items-center justify-center">
+                  <span className="absolute -bottom-1.5 inset-x-0 mx-auto w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-yellow-400 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center">
                     1
                   </span>
                 </div>
-                <div className="w-full bg-gradient-to-b from-yellow-500/20 to-slate-900 border border-yellow-500/50 rounded-2xl p-2.5 sm:p-3 text-center h-34 flex flex-col justify-between shadow-xl">
-                  <span className="text-xs font-black text-yellow-300 truncate block">{top1.name.split(' ')[0]}</span>
-                  <span className="text-sm font-black text-white">{top1.xp} XP</span>
-                  <span className="text-[10px] text-amber-300 font-bold flex items-center justify-center gap-0.5">
+                <div className="w-full bg-gradient-to-b from-yellow-500/20 to-slate-900 border border-yellow-500/50 rounded-2xl p-2 sm:p-3 text-center min-h-[7.5rem] sm:h-34 flex flex-col justify-between shadow-xl">
+                  <span className="text-[11px] sm:text-xs font-black text-yellow-300 truncate block">{top1.name.split(' ')[0]}</span>
+                  <span className="text-xs sm:text-sm font-black text-white">{top1.xp} XP</span>
+                  <span className="text-[9px] sm:text-[10px] text-amber-300 font-bold flex items-center justify-center gap-0.5">
                     <Flame className="w-3.5 h-3.5 fill-amber-400" /> {top1.streak}d
                   </span>
                 </div>
@@ -361,16 +361,16 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                   <img
                     src={top3.avatar}
                     alt={top3.name}
-                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-amber-600 object-cover shadow-lg"
+                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-amber-600 object-cover shadow-lg"
                   />
-                  <span className="absolute -bottom-2 inset-x-0 mx-auto w-6 h-6 rounded-full bg-amber-600 text-white font-black text-xs flex items-center justify-center">
+                  <span className="absolute -bottom-1.5 inset-x-0 mx-auto w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-600 text-white font-black text-[10px] sm:text-xs flex items-center justify-center">
                     3
                   </span>
                 </div>
-                <div className="w-full bg-slate-900 border border-slate-700/80 rounded-2xl p-2.5 sm:p-3 text-center h-24 flex flex-col justify-between">
-                  <span className="text-xs font-bold truncate block">{top3.name.split(' ')[0]}</span>
-                  <span className="text-xs font-black text-amber-400">{top3.xp} XP</span>
-                  <span className="text-[10px] text-amber-400 font-bold flex items-center justify-center gap-0.5">
+                <div className="w-full bg-slate-900 border border-slate-700/80 rounded-2xl p-2 sm:p-3 text-center min-h-[6rem] sm:h-24 flex flex-col justify-between">
+                  <span className="text-[11px] sm:text-xs font-bold truncate block">{top3.name.split(' ')[0]}</span>
+                  <span className="text-[11px] sm:text-xs font-black text-amber-400">{top3.xp} XP</span>
+                  <span className="text-[9px] sm:text-[10px] text-amber-400 font-bold flex items-center justify-center gap-0.5">
                     <Flame className="w-3 h-3 fill-amber-400" /> {top3.streak}d
                   </span>
                 </div>

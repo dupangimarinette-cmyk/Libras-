@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { LEARNING_MODULES } from './src/data/lessonsData';
 import { LIBRAS_SIGNS } from './src/data/signsData';
 import { MYSTERY_CHESTS, MASCOT_ITEMS, COMPANION_MASCOTS, PRESTIGE_TITLES, NAME_COLORS, SPECIAL_TRACKS, PREMIUM_POWERUPS } from './src/data/shopCatalogData';
+import { Persistence, createFirestoreStore, shutdownHook, getConnectError } from './persistence';
 import { LearningModule, LibrasSign, MysteryChest, MediaItem, PromoCode, SystemAnnouncement, AdminAuditLog, Lesson, UserFeedback } from './src/types/libras';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,6 +18,9 @@ const PORT = Number(process.env.PORT) || 3000;
 const DB_FILE = path.join(__dirname, 'sync_data.json');
 const ADMIN_STATE_FILE = path.join(__dirname, 'admin_state.json');
 
+// Persistência: Firestore (principal) ou arquivos JSON (reserva). Iniciada em startServer().
+let persistenceReady: Persistence = new Persistence(null, { dbFile: DB_FILE, adminFile: ADMIN_STATE_FILE });
+
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '15mb' }));
 
@@ -25,10 +29,7 @@ app.use(express.json({ limit: '15mb' }));
 // -------------------------------------------------------------
 function readSyncDb(): Record<string, any> {
   try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      return JSON.parse(raw);
-    }
+    return persistenceReady.getSyncDb();
   } catch (err) {
     console.error('Error reading sync DB:', err);
   }
@@ -37,7 +38,7 @@ function readSyncDb(): Record<string, any> {
 
 function writeSyncDb(data: Record<string, any>) {
   try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    persistenceReady.setSyncDb(data);
   } catch (err) {
     console.error('Error writing sync DB:', err);
   }
@@ -527,9 +528,8 @@ const DEFAULT_ADMIN_STATE: AdminStateData = {
 
 function readAdminState(): AdminStateData {
   try {
-    if (fs.existsSync(ADMIN_STATE_FILE)) {
-      const raw = fs.readFileSync(ADMIN_STATE_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
+    const parsed = persistenceReady.getAdminRaw();
+    if (parsed) {
       return {
         ...DEFAULT_ADMIN_STATE,
         ...parsed,
@@ -552,14 +552,14 @@ function readAdminState(): AdminStateData {
   } catch (err) {
     console.error('Error reading admin state:', err);
   }
-  return DEFAULT_ADMIN_STATE;
+  return structuredClone(DEFAULT_ADMIN_STATE);
 }
 
 function writeAdminState(data: AdminStateData) {
   try {
     data.lastContentVersion = Date.now();
     data.lastUpdatedAt = new Date().toISOString();
-    fs.writeFileSync(ADMIN_STATE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    persistenceReady.setAdminRaw(data as unknown as Record<string, any>);
   } catch (err) {
     console.error('Error writing admin state:', err);
   }
@@ -809,7 +809,8 @@ app.get('/api/signup/challenge', (req: Request, res: Response) => {
   challengeLimiter.hit(ip);
   const now = Date.now();
   const siteKey = process.env.TURNSTILE_SITE_KEY;
-  if (siteKey && process.env.TURNSTILE_SECRET_KEY && req.query.mode !== 'math') {
+  // Com Turnstile configurado NÃO existe alternativa mais fácil (antes dava para pedir ?mode=math e burlar).
+  if (siteKey && process.env.TURNSTILE_SECRET_KEY) {
     return res.json({ success: true, mode: 'turnstile', siteKey, token: signToken({ t: 'ch', ts: now, exp: now + CHALLENGE_TTL_MS, n: crypto.randomBytes(8).toString('hex') }) });
   }
   const a = crypto.randomInt(3, 15);
@@ -878,6 +879,17 @@ function broadcastAdminUpdate(data: any) {
   }
 }
 
+// Sinal de vida a cada 20s: proxies derrubam conexões SSE paradas, e o painel parava de receber avisos.
+setInterval(() => {
+  for (const client of adminSseClients) {
+    try {
+      client.write(': ping\n\n');
+    } catch {
+      adminSseClients.delete(client);
+    }
+  }
+}, 20_000).unref();
+
 app.post('/api/sync/save', (req: Request, res: Response) => {
   const { syncCode, username, userStats, missions } = req.body || {};
   if (!syncCode && !username) {
@@ -888,6 +900,12 @@ app.post('/api/sync/save', (req: Request, res: Response) => {
   }
   if (isAutomatedAccountName(username)) {
     return res.status(400).json({ success: false, code: 'AI_PROFILE_BLOCKED', message: 'Não é permitido criar perfis automáticos ou de IA como alunos.' });
+  }
+  // Perfil de visitante (ainda sem nome): fica só no aparelho. Antes ele criava conta sem verificação
+  // e depois podia ser renomeado para qualquer nome, driblando o bloqueio de robôs.
+  if (String(username || '').trim() === 'Você (Aprendiz)') {
+    const t = new Date().toISOString();
+    return res.json({ success: true, guest: true, updatedAt: t, createdAt: t, syncCode: String(syncCode || '') });
   }
 
   const db = readSyncDb();
@@ -921,10 +939,17 @@ app.post('/api/sync/save', (req: Request, res: Response) => {
 
   const nowIso = new Date().toISOString();
   const isNewUser = (!codeKey || !db[codeKey]) && (!userKey || !db[userKey]);
+  // Conta antiga criada como visitante ("Você (Aprendiz)") que agora ganhou nome = conta nova de verdade.
+  const existingName = String(existingRecord?.username || '').trim();
+  const wasGuestAccount = !!existingRecord && normalizeString(existingName) === normalizeString('Você (Aprendiz)');
+  const needsGate = isNewUser || wasGuestAccount;
+  // Trocar o nome de uma conta existente para nome de robô/IA/link também é recusado.
+  if (existingRecord && !wasGuestAccount && existingName && normalizeString(existingName) !== normalizeString(String(username || '')) && looksAutomatedName(username)) {
+    return res.status(400).json({ success: false, code: 'NAME_BLOCKED', message: 'Escolha outro nome ou apelido. Nomes de robôs, links ou só números/símbolos não são aceitos.' });
+  }
 
   // Conta nova exige verificação humana (exceto o perfil padrão oculto, que nunca aparece para ninguém).
-  const gate: SignupGate | null =
-    isNewUser && String(username || '').trim() !== 'Você (Aprendiz)' ? checkSignupGate(req, username) : null;
+  const gate: SignupGate | null = needsGate ? checkSignupGate(req, username) : null;
   if (gate && !gate.ok) {
     return res.status(gate.status).json({ success: false, code: gate.code, message: gate.message });
   }
@@ -947,8 +972,8 @@ app.post('/api/sync/save', (req: Request, res: Response) => {
     gainCredit: check.credit,
     streakBumpAt: check.streakBumpAt || existingRecord?.streakBumpAt,
     authKeyHashes: existingRecord?.authKeyHashes || [],
-    signupIpHash: isNewUser ? ipHashOf(req) : existingRecord?.signupIpHash,
-    signupAt: isNewUser ? nowIso : existingRecord?.signupAt,
+    signupIpHash: needsGate ? ipHashOf(req) : existingRecord?.signupIpHash,
+    signupAt: needsGate ? nowIso : existingRecord?.signupAt,
   };
 
   if (codeKey) {
@@ -972,7 +997,7 @@ app.post('/api/sync/save', (req: Request, res: Response) => {
   writeSyncDb(db);
   if (gate && gate.ok) gate.consume();
 
-  if (isNewUser && username && username !== 'Você (Aprendiz)') {
+  if (needsGate && username) {
     logAdminAction('Novo Aluno Registrado', `Novo estudante cadastrado no sistema: "${username}" com código ${codeKey}`);
   }
 
@@ -1746,6 +1771,8 @@ app.get('/api/announcements', (_req: Request, res: Response) => {
 // -------------------------------------------------------------
 // Tudo em /api/admin/* exige token de administrador, exceto login e recuperação de senha autorizada.
 app.use('/api/admin', (req: Request, res: Response, next: () => void) => {
+  // Painel sempre precisa do dado mais novo: nada de cache de navegador/proxy.
+  res.setHeader('Cache-Control', 'no-store');
   if (req.path === '/auth/login' || req.path === '/auth/recover-password') return next();
   return requireAdmin(req, res, next);
 });
@@ -3335,14 +3362,22 @@ app.delete('/api/admin/users/:username/challenges/:challengeId', (req: Request, 
 
 app.get('/api/admin/realtime-stream', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // impede proxies de segurar os eventos
   res.flushHeaders?.();
   adminSseClients.add(res);
   res.write(`data: ${JSON.stringify({ type: 'CONNECTED', timestamp: new Date().toISOString() })}\n\n`);
   _req.on('close', () => {
     adminSseClients.delete(res);
   });
+});
+
+// Backup completo (só admin: a rota fica atrás do requireAdmin). Mesmo formato dos arquivos antigos,
+// então serve para restaurar colocando como sync_data.json / admin_state.json.
+app.get('/api/admin/backup', (_req: Request, res: Response) => {
+  res.setHeader('Content-Disposition', `attachment; filename="librasgo-backup-${new Date().toISOString().slice(0, 10)}.json"`);
+  res.json({ sync_data: readSyncDb(), admin_state: persistenceReady.getAdminRaw() || {} });
 });
 
 app.get('/api/admin/realtime-feed', (_req: Request, res: Response) => {
@@ -3360,11 +3395,17 @@ app.get('/api/admin/realtime-feed', (_req: Request, res: Response) => {
   let totalXP = 0;
   let activeUsers24h = 0;
   let activeUsers7d = 0;
+  let hiddenRecords = 0;
+  let noStatsRecords = 0;
+  let totalRecords = 0;
 
   for (const [key, val] of Object.entries(db)) {
+    totalRecords++;
+    if (!val || !val.userStats) noStatsRecords++;
     if (val && val.userStats) {
       const uname = (val.username || val.userStats.username || key.replace(/^USER_/, '')).trim();
       const norm = normalizeString(uname);
+      if (isHiddenFromRealUsers(uname)) hiddenRecords++;
       if (isHiddenFromRealUsers(uname) || seenUsernames.has(norm)) continue;
       seenUsernames.add(norm);
       const role = val.role || val.userStats.role || (norm === 'marinette' || norm === 'admin' ? 'admin' : 'learner');
@@ -3475,6 +3516,17 @@ app.get('/api/admin/realtime-feed', (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     totalUsers: userList.length,
     stats,
+    diagnostics: {
+      persistenceMode: persistenceReady.mode,
+      persistenceNote: persistenceReady.mode === 'file' ? getConnectError() : '',
+      projectIdSecret: !!(process.env.FIREBASE_PROJECT_ID || '').trim(),
+      serviceAccountSecret: !!(process.env.FIREBASE_SERVICE_ACCOUNT || '').trim(),
+      totalRecords,       // registros no banco (cada aluno tem 2: por código e por nome)
+      hiddenRecords,      // escondidos por serem robô/teste/arquivados
+      noStatsRecords,     // registros sem dados de aluno (não listáveis)
+      listed: userList.length,
+      sseClients: adminSseClients.size,
+    },
     users: userList,
     events: events.slice(0, 20),
     pendingFeedbacksCount: unreadFeedbacks.length,
@@ -3799,6 +3851,17 @@ app.delete('/api/admin/feedbacks/:id', (req: Request, res: Response) => {
 // SERVER SETUP & VITE MIDDLEWARE
 // -------------------------------------------------------------
 async function startServer() {
+  const store = await createFirestoreStore(path.join(__dirname, 'firebase-applet-config.json'));
+  persistenceReady = new Persistence(store, { dbFile: DB_FILE, adminFile: ADMIN_STATE_FILE });
+  try {
+    await persistenceReady.init();
+  } catch (err) {
+    // Não sobe com dados incompletos: melhor falhar alto do que sobrescrever dados bons depois.
+    console.error('[PERSISTÊNCIA] ERRO FATAL ao carregar os dados:', err);
+    process.exit(1);
+  }
+  shutdownHook(persistenceReady);
+  console.log(`[PERSISTÊNCIA] Modo ativo: ${persistenceReady.mode === 'firestore' ? 'FIRESTORE' : 'ARQUIVOS JSON'}`);
   ensureAdminCredentials();
   const isProd = process.env.NODE_ENV === 'production';
 

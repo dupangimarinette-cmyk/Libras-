@@ -203,7 +203,7 @@ export const FacialExerciseModal: React.FC<FacialExerciseModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 select-none">
-      <div className="w-full max-w-xl bg-slate-900 border border-indigo-500/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+      <div className="w-full max-w-xl bg-slate-900 border border-indigo-500/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92dvh]">
         
         {/* Header */}
         <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border-b border-slate-800 flex items-center justify-between gap-3">
@@ -241,7 +241,7 @@ export const FacialExerciseModal: React.FC<FacialExerciseModalProps> = ({
           </div>
 
           {/* Camera Viewport with Holographic Overlay */}
-          <div className="relative aspect-[4/3] w-full rounded-3xl overflow-hidden bg-black border border-slate-800 shadow-inner flex items-center justify-center">
+          <div className="relative aspect-[4/3] max-h-[35vh] sm:max-h-none w-full rounded-3xl overflow-hidden bg-black border border-slate-800 shadow-inner flex items-center justify-center">
             {hasCameraPermission ? (
               <>
                 <video

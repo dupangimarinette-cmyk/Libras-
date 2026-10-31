@@ -5,7 +5,6 @@ import { audio } from '../services/audioService';
 import { adminService } from '../services/adminService';
 import { shopService } from '../services/shopService';
 import { getProfileColorConfig } from '../data/themesData';
-import { PWAInstallBanner } from './common/PWAInstallBanner';
 import { ProfileAvatar } from './common/ProfileAvatar';
 
 interface HeaderProps {
@@ -70,8 +69,8 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
-      <header className="sticky top-0 z-40 w-full bg-slate-950/80 backdrop-blur-md border-b border-white/10 text-white px-4 py-2.5 transition-all">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
+      <header className="sticky top-0 z-40 w-full bg-slate-950/85 backdrop-blur-md border-b border-white/10 text-white px-2.5 sm:px-4 pt-[max(0.5rem,env(safe-area-inset-top,0px))] pb-2 transition-all">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-1.5 sm:gap-4">
           
           {/* Logo & Brand (Clickable to open About / Info) */}
           <button
@@ -79,31 +78,31 @@ export const Header: React.FC<HeaderProps> = ({
               audio.playClick();
               onOpenAbout();
             }}
-            className="flex items-center gap-2.5 text-left group cursor-pointer hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 sm:gap-2.5 text-left group cursor-pointer hover:opacity-90 transition-opacity flex-shrink-0"
             title="Sobre o aplicativo e informações"
           >
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 shadow-lg shadow-emerald-500/20 text-white font-extrabold text-xl group-hover:scale-105 transition-transform">
+            <div className="relative flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 shadow-lg shadow-emerald-500/20 text-white font-extrabold text-lg sm:text-xl group-hover:scale-105 transition-transform">
               <span>🤟</span>
-              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 sm:h-3 sm:w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-emerald-500"></span>
               </span>
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-black text-lg tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <span className="font-black text-base sm:text-lg tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
                   LibrasGo
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">
-                  AR 3D
+                <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1 sm:px-1.5 py-0.2 rounded-full">
+                  AR
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 hidden sm:block">Aprenda Libras em Realidade Aumentada</p>
+              <p className="text-[11px] text-slate-400 hidden md:block">Aprenda Libras em Realidade Aumentada</p>
             </div>
           </button>
 
           {/* Gamification Stats: Streak, Gems, Hearts, Level */}
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1 sm:gap-2.5 flex-nowrap overflow-x-visible">
             
             {/* Streak Button */}
             <button
@@ -111,13 +110,13 @@ export const Header: React.FC<HeaderProps> = ({
                 audio.playStreakIgnite();
                 setShowStreakModal(true);
               }}
-              className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-amber-500/30 text-amber-400 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              className="group flex items-center gap-1 sm:gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-amber-500/30 text-amber-400 transition-all hover:scale-105 active:scale-95 cursor-pointer flex-shrink-0"
               title="Ofensiva diária"
             >
               <div className="relative">
-                <Flame className="w-5 h-5 text-amber-500 fill-amber-500 animate-pulse group-hover:scale-110 transition-transform" />
+                <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 fill-amber-500 animate-pulse group-hover:scale-110 transition-transform" />
               </div>
-              <span className="font-extrabold text-sm text-amber-400 group-hover:text-amber-300">
+              <span className="font-extrabold text-xs sm:text-sm text-amber-400 group-hover:text-amber-300">
                 {stats.streak}
               </span>
               <span className="text-xs text-amber-200/80 hidden md:inline">dias</span>
@@ -129,23 +128,23 @@ export const Header: React.FC<HeaderProps> = ({
                 audio.playClick();
                 onOpenShop();
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-cyan-500/40 text-cyan-400 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm shadow-cyan-500/20"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-cyan-500/40 text-cyan-400 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm shadow-cyan-500/20 flex-shrink-0"
               title="Loja Premium • Seus Diamantes Virtuais"
             >
-              <Sparkles className="w-4 h-4 text-cyan-400 fill-cyan-400/40 animate-pulse" />
-              <span className="font-extrabold text-sm text-cyan-300 font-mono">
-                {stats.gems} 💎
+              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 fill-cyan-400/40 animate-pulse" />
+              <span className="font-extrabold text-xs sm:text-sm text-cyan-300 font-mono">
+                {stats.gems}💎
               </span>
             </button>
 
-            {/* Resgate de Códigos Button */}
+            {/* Resgate de Códigos Button (Desktop/Tablet) */}
             {onOpenRedeem && (
               <button
                 onClick={() => {
                   audio.playClick();
                   onOpenRedeem();
                 }}
-                className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-fuchsia-500/40 text-fuchsia-400 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm shadow-fuchsia-500/20"
+                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-fuchsia-500/40 text-fuchsia-400 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm shadow-fuchsia-500/20"
                 title="Resgate • Insira Códigos de Recompensa"
               >
                 <Gift className="w-4 h-4 text-fuchsia-400 fill-fuchsia-400/30 animate-pulse" />
@@ -161,17 +160,17 @@ export const Header: React.FC<HeaderProps> = ({
                 audio.playClick();
                 setShowHeartsModal(true);
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-rose-500/30 text-rose-400 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-rose-500/30 text-rose-400 transition-all hover:scale-105 active:scale-95 cursor-pointer flex-shrink-0"
               title="Vidas restantes"
             >
-              <Heart className="w-4 h-4 text-rose-500 fill-rose-500 animate-pulse" />
-              <span className="font-extrabold text-sm text-rose-300">
+              <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500 fill-rose-500 animate-pulse" />
+              <span className="font-extrabold text-xs sm:text-sm text-rose-300">
                 {stats.hearts}
               </span>
             </button>
 
             {/* Level / XP */}
-            <div className="hidden lg:flex items-center gap-2 pl-2 border-l border-slate-800">
+            <div className="hidden xl:flex items-center gap-2 pl-2 border-l border-slate-800">
               <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-black text-xs">
                 N{stats.level}
               </div>
@@ -187,22 +186,20 @@ export const Header: React.FC<HeaderProps> = ({
                 audio.playClick();
                 onOpenARStudio();
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/25 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/25 transition-all hover:scale-105 active:scale-95 cursor-pointer flex-shrink-0"
+              title="Treino em Realidade Aumentada"
             >
               <Camera className="w-4 h-4" />
               <span className="hidden sm:inline">Treino AR</span>
             </button>
 
-            {/* PWA Compact Install Button */}
-            <PWAInstallBanner compact={true} />
-
-            {/* Info / About Button (Desktop / Tablet - Logo opens on mobile) */}
+            {/* Info / About Button (Desktop / Tablet) */}
             <button
               onClick={() => {
                 audio.playClick();
                 onOpenAbout();
               }}
-              className="hidden sm:flex p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-400 hover:text-white transition-all cursor-pointer"
+              className="hidden md:flex p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-400 hover:text-white transition-all cursor-pointer flex-shrink-0"
               title="Sobre o aplicativo e informações"
               aria-label="Sobre o aplicativo"
             >
@@ -218,7 +215,7 @@ export const Header: React.FC<HeaderProps> = ({
                   setSyncFeedback('Sincronizado!');
                   setTimeout(() => setSyncFeedback(null), 3000);
                 }}
-                className={`relative p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`relative p-1.5 sm:p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 flex-shrink-0 ${
                   syncStatus?.isSyncing
                     ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300'
                     : syncStatus?.syncError
@@ -233,11 +230,11 @@ export const Header: React.FC<HeaderProps> = ({
                 aria-label="Sincronização em nuvem"
               >
                 {syncStatus?.isSyncing ? (
-                  <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+                  <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-cyan-400" />
                 ) : syncStatus?.syncError ? (
-                  <CloudOff className="w-4 h-4 text-amber-400" />
+                  <CloudOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
                 ) : (
-                  <Cloud className="w-4 h-4 text-emerald-400" />
+                  <Cloud className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
                 )}
                 {syncFeedback && (
                   <span className="hidden sm:inline text-[10px] font-black text-emerald-300 animate-fade-in">
@@ -250,11 +247,11 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Sound Toggle */}
             <button
               onClick={onToggleSound}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer flex-shrink-0"
               title={stats.soundEnabled ? 'Silenciar efeitos sonoros' : 'Ativar efeitos sonoros'}
               aria-label="Controle de áudio"
             >
-              {stats.soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+              {stats.soundEnabled ? <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500" />}
             </button>
 
             {/* Admin Panel Quick Access Button */}
@@ -264,7 +261,7 @@ export const Header: React.FC<HeaderProps> = ({
                   audio.playClick();
                   onOpenAdmin();
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer border ${
+                className={`flex items-center gap-1 sm:gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl font-black text-xs shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer border flex-shrink-0 ${
                   isAdmin
                     ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white border-indigo-400/40 shadow-indigo-600/30'
                     : 'bg-slate-800/90 hover:bg-slate-700/90 border-indigo-500/30 text-indigo-300 hover:text-white'
@@ -285,7 +282,7 @@ export const Header: React.FC<HeaderProps> = ({
                     audio.playClick();
                     onOpenProfile();
                   }}
-                  className="flex items-center gap-2 p-1 pl-1 pr-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 transition-all cursor-pointer group"
+                  className="flex items-center gap-1.5 p-0.5 sm:p-1 pl-0.5 sm:pl-1 pr-1.5 sm:pr-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 transition-all cursor-pointer group flex-shrink-0"
                   style={{ borderColor: `${profileTheme.colorHex}50` }}
                   title={`Perfil de ${stats.username}`}
                 >
@@ -296,7 +293,7 @@ export const Header: React.FC<HeaderProps> = ({
                     size="sm"
                     fallbackBorderColor={profileTheme.colorHex}
                   />
-                  <span className={`hidden sm:inline text-xs truncate max-w-[110px] ${shopService.getNameColorStyle(stats.nameColor)}`}>
+                  <span className={`hidden sm:inline text-xs truncate max-w-[90px] md:max-w-[110px] ${shopService.getNameColorStyle(stats.nameColor)}`}>
                     {stats.username}
                   </span>
                 </button>

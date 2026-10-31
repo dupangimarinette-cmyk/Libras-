@@ -878,17 +878,19 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
           </div>
 
           {/* Dynamic Live Guidance Alert Box */}
-          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex items-center gap-3 shadow-lg">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0">
-              <Eye className="w-5 h-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                Feedback Inteligente da IA
-              </span>
-              <p className={`text-xs sm:text-sm font-bold ${guidance.color} leading-snug mt-0.5`}>
-                {guidance.text}
-              </p>
+          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0">
+                <Eye className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Feedback Inteligente da IA
+                </span>
+                <p className={`text-xs sm:text-sm font-bold ${guidance.color} leading-snug mt-0.5`}>
+                  {guidance.text}
+                </p>
+              </div>
             </div>
             {!isFreePracticeMode && (
               <button
@@ -902,7 +904,7 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
                   setCelebrationDetails({ xp: earnedXp, gems: earnedGems, item: currentExercise.mascotRewardItemId });
                   setShowCelebrationModal(true);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-xs font-black text-emerald-300 transition-all cursor-pointer whitespace-nowrap shadow-sm shadow-emerald-500/20 shrink-0"
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-xs font-black text-emerald-300 transition-all cursor-pointer whitespace-nowrap shadow-sm shadow-emerald-500/20 shrink-0"
                 title="Validação imediata para avanço assistido"
               >
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -1180,7 +1182,7 @@ export const FacialPracticeView: React.FC<FacialPracticeViewProps> = ({
       {/* Success Modal with Mascot Item Unlock Celebration */}
       {showCelebrationModal && celebrationDetails && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border-2 border-emerald-500/50 rounded-3xl p-6 shadow-2xl text-center flex flex-col items-center animate-fade-in">
+          <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto bg-slate-900 border-2 border-emerald-500/50 rounded-3xl p-6 shadow-2xl text-center flex flex-col items-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-3">
               <CheckCircle2 className="w-10 h-10 animate-bounce" />
             </div>

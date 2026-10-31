@@ -53,7 +53,7 @@ export const PurchaseConfirmModal: React.FC<PurchaseConfirmModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none animate-fade-in">
-      <div className="w-full max-w-md bg-slate-900 border-2 border-indigo-500/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+      <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto bg-slate-900 border-2 border-indigo-500/40 rounded-3xl shadow-2xl flex flex-col">
         
         {/* Header */}
         <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border-b border-slate-800 flex items-center justify-between">

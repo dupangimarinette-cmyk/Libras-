@@ -579,26 +579,26 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
     <div className="relative w-full max-w-4xl mx-auto flex flex-col rounded-3xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl text-white">
       
       {/* Top Studio Bar */}
-      <div className="flex items-center justify-between p-3.5 sm:p-4 bg-slate-900/90 border-b border-slate-800 flex-wrap gap-2">
-        <div className="flex items-center gap-2.5">
+      <div className="flex items-center justify-between p-2.5 sm:p-4 bg-slate-900/90 border-b border-slate-800 flex-wrap gap-2">
+        <div className="flex items-center gap-2 sm:gap-2.5">
           <button
             onClick={handlePrevSign}
             className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
             title="Sinal anterior"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="text-xs uppercase font-extrabold tracking-wider text-emerald-400">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider text-emerald-400">
                 Sinal {currentSignIndex + 1} de {signList.length}
               </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold">
+              <span className="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.2 rounded-full bg-slate-800 text-slate-300 font-bold">
                 {activeSign.category}
               </span>
             </div>
-            <h2 className="text-lg sm:text-xl font-black text-white leading-tight">
+            <h2 className="text-base sm:text-xl font-black text-white leading-tight">
               {activeSign.name}
             </h2>
           </div>
@@ -608,15 +608,15 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
             className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
             title="Próximo sinal"
           >
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
         {/* AI & Sensitivity status pills */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
           {/* AI Status Badge */}
           <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-bold border ${
               trackingState.isHandDetected
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                 : aiModelStatus === 'ready'
@@ -883,28 +883,29 @@ export const ARCameraView: React.FC<ARCameraViewProps> = ({
       </div>
 
       {/* Real-time Diagnostic Finger Indicators (shows user exactly what AI sees) */}
-      <div className="px-4 py-2.5 bg-slate-900 border-t border-slate-800 flex items-center justify-between flex-wrap gap-2 text-xs">
-        <span className="text-slate-400 font-bold text-[11px]">Leitura dos Dedos:</span>
-        <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-900 border-t border-slate-800 flex items-center justify-between flex-wrap gap-1.5 text-xs">
+        <span className="text-slate-400 font-bold text-[10px] sm:text-[11px]">Leitura dos Dedos:</span>
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
           {[
-            { label: 'Polegar', active: trackingState.fingersStatus.thumb, req: activeSign.poseRule.thumbExtended },
-            { label: 'Indicador', active: trackingState.fingersStatus.index, req: activeSign.poseRule.indexExtended },
-            { label: 'Médio', active: trackingState.fingersStatus.middle, req: activeSign.poseRule.middleExtended },
-            { label: 'Anelar', active: trackingState.fingersStatus.ring, req: activeSign.poseRule.ringExtended },
-            { label: 'Mínimo', active: trackingState.fingersStatus.pinky, req: activeSign.poseRule.pinkyExtended },
+            { label: 'Polegar', short: 'Pol', active: trackingState.fingersStatus.thumb, req: activeSign.poseRule.thumbExtended },
+            { label: 'Indicador', short: 'Ind', active: trackingState.fingersStatus.index, req: activeSign.poseRule.indexExtended },
+            { label: 'Médio', short: 'Méd', active: trackingState.fingersStatus.middle, req: activeSign.poseRule.middleExtended },
+            { label: 'Anelar', short: 'Ane', active: trackingState.fingersStatus.ring, req: activeSign.poseRule.ringExtended },
+            { label: 'Mínimo', short: 'Mín', active: trackingState.fingersStatus.pinky, req: activeSign.poseRule.pinkyExtended },
           ].map((finger, idx) => {
             const isMatch = finger.active === finger.req;
             return (
               <span
                 key={idx}
-                className={`px-2 py-0.5 rounded-lg font-bold text-[10px] flex items-center gap-1 border transition-colors ${
+                className={`px-1.5 sm:px-2 py-0.5 rounded-lg font-bold text-[9px] sm:text-[10px] flex items-center gap-1 border transition-colors ${
                   isMatch
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                     : 'bg-slate-800 text-slate-400 border-slate-700'
                 }`}
               >
-                {isMatch ? <Check className="w-3 h-3 text-emerald-400" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />}
-                {finger.label}: {finger.active ? 'Aberto' : 'Fechado'}
+                {isMatch ? <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-400" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />}
+                <span className="sm:hidden">{finger.short}: {finger.active ? 'Sim' : 'Não'}</span>
+                <span className="hidden sm:inline">{finger.label}: {finger.active ? 'Aberto' : 'Fechado'}</span>
               </span>
             );
           })}

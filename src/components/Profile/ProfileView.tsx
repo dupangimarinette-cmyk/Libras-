@@ -34,7 +34,6 @@ import { COMPANION_MASCOTS, MASCOT_ITEMS, NAME_COLORS } from '../../data/shopCat
 import { AVATAR_OPTIONS } from '../Auth/LoginView';
 import { LibrasSignIllustration } from '../common/LibrasSignIllustration';
 import { LibrinhaMascot } from '../Mascot/LibrinhaMascot';
-import { PWAInstallBanner } from '../common/PWAInstallBanner';
 import { audio } from '../../services/audioService';
 import { storageService } from '../../services/storageService';
 import { shopService } from '../../services/shopService';
@@ -162,9 +161,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-6 pb-28 text-white space-y-6">
       
-      {/* PWA Install Notice Banner */}
-      <PWAInstallBanner />
-
       {/* Profile Card Header */}
       {(() => {
         const profileTheme = getProfileColorConfig(stats.profileColor || stats.activeTheme);
@@ -757,7 +753,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 audio.playClick();
                 setInventoryCategory('mascots');
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                 inventoryCategory === 'mascots'
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -771,7 +767,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 audio.playClick();
                 setInventoryCategory('frames');
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                 inventoryCategory === 'frames'
                   ? 'bg-gradient-to-r from-amber-500 via-purple-600 to-cyan-500 text-white font-black shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -785,7 +781,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 audio.playClick();
                 setInventoryCategory('accessories');
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                 inventoryCategory === 'accessories'
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-black shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -799,7 +795,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 audio.playClick();
                 setInventoryCategory('titles');
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                 inventoryCategory === 'titles'
                   ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white font-black shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -813,7 +809,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 audio.playClick();
                 setInventoryCategory('colors');
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                 inventoryCategory === 'colors'
                   ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -1329,7 +1325,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       {/* Restore Cloud Sync Modal */}
       {showRestoreModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 shadow-2xl text-white space-y-4">
+          <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 shadow-2xl text-white space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Cloud className="w-5 h-5 text-cyan-400" />
@@ -1388,7 +1384,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       {/* Edit Profile Modal */}
       {isEditing && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl text-white">
+          <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl text-white">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
               <h3 className="text-lg font-black">Editar Perfil</h3>
               <button
@@ -1430,7 +1426,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">
                   Escolha seu Avatar:
                 </label>
-                <div className="grid grid-cols-6 gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                   {AVATAR_OPTIONS.map((av) => (
                     <button
                       key={av.id}

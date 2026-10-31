@@ -45,7 +45,7 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-md rounded-3xl bg-slate-900 border border-amber-500/40 p-6 sm:p-7 shadow-2xl text-white text-center space-y-5 overflow-hidden">
+      <div className="relative w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-3xl bg-slate-900 border border-amber-500/40 p-6 sm:p-7 shadow-2xl text-white text-center space-y-5">
         
         {/* Glow behind chest */}
         <div
