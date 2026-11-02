@@ -1,20 +1,15 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Atualização LibrasGo: Ranks Safira e Diamante
 
-# Run and deploy your AI Studio app
+Esta atualização adiciona os novos níveis de progressão **Safira** e **Diamante** ao aplicativo LibrasGo.
 
-This contains everything you need to run your app locally.
+## Sistema de Progressão de Ranks
+1. **Bronze** (Nível Inicial)
+2. **Prata** (100 - 499 XP)
+3. **Ouro** (500 - 1.199 XP)
+4. **Safira** (1.200 - 2.499 XP) - *Novo!*
+5. **Diamante** (2.500+ XP) - *Novo!*
 
-View your app in AI Studio: https://ai.studio/apps/7fc73562-a227-435d-ac1f-74996e06afd5
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Estrutura do Arquivo Zip
+- `ranks.json`: Configuração das faixas de pontuação, ícones e cores para cada rank.
+- `RankController.js`: Lógica do aplicativo para verificar e realizar o upgrade de rank automaticamente com base no XP do usuário.
+- `RankBadge.jsx`: Componente UI para exibição dos badges de Safira e Diamante com gradientes e animações de conquista.

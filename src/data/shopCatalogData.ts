@@ -332,16 +332,16 @@ export const COMPANION_MASCOTS: CompanionMascot[] = [
     personality: 'Aventureiro, destemido e inspirador.',
   },
   {
-    id: 'dragaozinho',
-    name: 'Pequeno Draco',
-    title: 'Guardião Lendário da Inclusão',
-    description: 'Um dragãozinho amigável com escamas furta-cor que solta confetes e faíscas brilhantes ao comemorar.',
+    id: 'dragaozinho', // id mantido para preservar os mascotes já adquiridos
+    name: 'Lupi',
+    title: 'Golden Retriever Guardião da Inclusão',
+    description: 'Um Golden Retriever dourado e amigável, de coleira azul, que balança o rabo e comemora cada sinal aprendido com você.',
     cost: 400,
     rarity: 'lendario',
-    icon: '🐲',
+    icon: '🐶',
     avatarUrl: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=150&auto=format&fit=crop&q=80',
-    previewColor: '#ec4899',
-    personality: 'Carismático, nobre e protetor.',
+    previewColor: '#eab308',
+    personality: 'Alegre, leal e incentivador.',
   },
 ];
 

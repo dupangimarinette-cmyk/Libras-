@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { MascotTipsToggle } from '../Mascot/MascotCompanion';
 import {
   User,
   Edit3,
@@ -40,6 +41,8 @@ import { shopService } from '../../services/shopService';
 import { APP_THEMES, COLOR_PALETTE, getThemeConfig, getProfileColorConfig } from '../../data/themesData';
 import { PROFILE_FRAMES, isProfileFrameUnlocked, getEquippedFrame, ProfileFrame } from '../../data/profileFramesData';
 import { ProfileAvatar } from '../common/ProfileAvatar';
+import { calculateRank, getAllRanks } from '../../controllers/rankController';
+import { RankBadge } from '../common/RankBadge';
 
 interface ProfileViewProps {
   stats: UserStats;
@@ -218,6 +221,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     
                     {/* Active Title, Profile Color, Frame, Theme & Role Badges */}
                     <div className="flex items-center justify-center sm:justify-start gap-2 mt-1 flex-wrap">
+                      <RankBadge rankId={calculateRank(stats.xp).currentRank.id} variant="compact" />
+
                       <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1">
                         <Award className="w-3.5 h-3.5" />
                         <span>{stats.activeTitle || 'Aprendiz Curioso'}</span>
@@ -349,6 +354,115 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
     );
   })()}
+
+      {/* SISTEMA DE PROGRESSÃO DE RANKS: OURO -> SAFIRA -> DIAMANTE */}
+      {(() => {
+        const userRank = calculateRank(stats.xp);
+        const allRanks = getAllRanks();
+
+        return (
+          <div className="p-5 sm:p-6 rounded-3xl bg-slate-900 border border-indigo-500/30 shadow-2xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-yellow-500 via-blue-600 to-cyan-400 p-0.5 shadow-md flex-shrink-0">
+                  <div className="w-full h-full bg-slate-950 rounded-2xl flex items-center justify-center text-lg">
+                    💎
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-white">
+                      Sistema de Ranks & Ligas
+                    </h3>
+                    <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-slate-950">
+                      Ouro → Safira → Diamante
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    Evolua no aplicativo e desbloqueie distintivos brilhantes, Diamantes virtuais e títulos exclusivos!
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                <RankBadge rankId={userRank.currentRank.id} variant="compact" />
+              </div>
+            </div>
+
+            {/* Current Active Rank Spotlight Card */}
+            <RankBadge
+              rankId={userRank.currentRank.id}
+              xp={stats.xp}
+              showProgress={true}
+              variant="card"
+            />
+
+            {/* All 5 Ranks Progression Timeline */}
+            <div className="space-y-2.5">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block">
+                Trilha de Progressão de Ranks:
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+                {allRanks.map((rk) => {
+                  const isReached = stats.xp >= rk.minXP;
+                  const isCurrent = userRank.currentRank.id === rk.id;
+
+                  return (
+                    <div
+                      key={rk.id}
+                      className={`p-3 rounded-2xl border transition-all flex flex-col justify-between gap-2 ${
+                        isCurrent
+                          ? `border-2 ${rk.borderClass} ${rk.bgClass} shadow-lg ring-2 ring-white/20`
+                          : isReached
+                          ? 'bg-slate-950/80 border-emerald-500/30 text-slate-200'
+                          : 'bg-slate-950/40 border-slate-800 text-slate-500 opacity-70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xl">{rk.badgeEmoji}</span>
+                        {isCurrent ? (
+                          <span className="text-[9px] uppercase font-black px-1.5 py-0.2 rounded-full bg-white text-slate-950">
+                            Atual
+                          </span>
+                        ) : isReached ? (
+                          <span className="text-[9px] uppercase font-black px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300">
+                            ✓ Conquistado
+                          </span>
+                        ) : (
+                          <span className="text-[9px] uppercase font-bold text-slate-500">
+                            🔒 {rk.minXP} XP
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <h4
+                          className="text-xs font-black capitalize"
+                          style={{ color: isReached ? rk.color : '#94a3b8' }}
+                        >
+                          {rk.name}
+                        </h4>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          {rk.minXP} {rk.maxXP ? `- ${rk.maxXP}` : '+'} XP
+                        </span>
+                      </div>
+
+                      {/* Virtual Rewards preview */}
+                      <div className="pt-1.5 border-t border-white/5 text-[10px] text-slate-300">
+                        <span className="text-amber-300 font-bold block">+{rk.virtualRewards.gems} 💎</span>
+                        {rk.virtualRewards.title && (
+                          <span className="text-slate-400 truncate block text-[9px]">"{rk.virtualRewards.title}"</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* CLOUD PROGRESS SYNC CARD (ITEM 1) */}
       <div className="p-5 sm:p-6 rounded-3xl bg-slate-900 border border-cyan-500/30 shadow-xl space-y-4">
@@ -1466,6 +1580,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
       )}
+
+      <MascotTipsToggle />
 
     </div>
   );

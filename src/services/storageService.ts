@@ -1,4 +1,4 @@
-import { UserStats, DailyMission, LeaderboardEntry, FriendUser, WeeklyChallenge, FriendRequest } from '../types/libras';
+import { UserStats, DailyMission, LeaderboardEntry, FriendUser, WeeklyChallenge, FriendRequest, SavedPhraseItem } from '../types/libras';
 import { INITIAL_DAILY_MISSIONS } from '../data/missionsData';
 import { INITIAL_LEADERBOARD } from '../data/mockLeaderboard';
 import { userFetch } from './userAuth';
@@ -6,6 +6,7 @@ import { getSignupPass, clearSignupPass, HUMAN_CHECK_EVENT, SIGNUP_BLOCKED_EVENT
 import { generateSyncCode } from '../utils/syncCode';
 import { db } from './firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { calculateRank } from '../controllers/rankController';
 
 const STORAGE_KEY_STATS = 'librasgo_user_stats';
 const STORAGE_KEY_MISSIONS = 'librasgo_missions';
@@ -55,6 +56,9 @@ const DEFAULT_STATS: UserStats = {
   unlockedNameColors: ['gold'],
   unopenedChestsCount: 0,
   redeemedPromoCodes: [],
+  savedPhrases: [],
+  currentRankId: 'bronze',
+  claimedRankRewards: [],
 };
 
 const STARTER_NAME_COLORS = ['gold', 'neon_cyan', 'amethyst', 'pink_neon', 'emerald_royal', 'blue_sapphire'];
@@ -65,6 +69,8 @@ export const storageService = {
       const data = localStorage.getItem(STORAGE_KEY_STATS);
       if (data) {
         const parsed = JSON.parse(data);
+        const xp = Number(parsed.xp) || 0;
+        const currentRank = calculateRank(xp).currentRank;
         return {
           ...DEFAULT_STATS,
           ...parsed,
@@ -82,6 +88,9 @@ export const storageService = {
           unlockedNameColors: Array.from(new Set([...STARTER_NAME_COLORS, ...(parsed.unlockedNameColors || [])])),
           unopenedChestsCount: parsed.unopenedChestsCount !== undefined ? parsed.unopenedChestsCount : 0,
           redeemedPromoCodes: Array.isArray(parsed.redeemedPromoCodes) ? parsed.redeemedPromoCodes : [],
+          savedPhrases: Array.isArray(parsed.savedPhrases) ? parsed.savedPhrases : [],
+          currentRankId: currentRank.id,
+          claimedRankRewards: Array.isArray(parsed.claimedRankRewards) ? parsed.claimedRankRewards : [],
         };
       }
     } catch {
@@ -279,9 +288,14 @@ export const storageService = {
 
   updateUserXpInLeaderboard(newXp: number): LeaderboardEntry[] {
     const list = this.getLeaderboard();
+    const rankInfo = calculateRank(newXp);
     const updated = list.map((item) => {
       if (item.isCurrentUser) {
-        return { ...item, xp: newXp };
+        return {
+          ...item,
+          xp: newXp,
+          league: rankInfo.currentRank.name as any,
+        };
       }
       return item;
     });
@@ -317,13 +331,15 @@ export const storageService = {
         if (data.success && Array.isArray(data.users) && data.users.length > 0) {
           const mapped: LeaderboardEntry[] = data.users.map((u: any, idx: number) => {
             const isCurrent = currentUser?.username && u.username.toLowerCase() === currentUser.username.toLowerCase();
+            const userXp = isCurrent && currentUser ? currentUser.xp : (u.xp || 0);
+            const userRank = calculateRank(userXp).currentRank;
             return {
               id: u.syncCode || `user_real_${idx}`,
               name: isCurrent && currentUser ? currentUser.username : u.username,
               avatar: isCurrent && currentUser ? currentUser.avatarUrl : (u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'),
-              xp: isCurrent && currentUser ? currentUser.xp : (u.xp || 0),
+              xp: userXp,
               streak: isCurrent && currentUser ? currentUser.streak : (u.streak || 1),
-              league: (u.xp >= 1000 ? 'Diamante' : u.xp >= 600 ? 'Safira' : u.xp >= 300 ? 'Ouro' : u.xp >= 100 ? 'Prata' : 'Bronze') as any,
+              league: userRank.name as any,
               rank: idx + 1,
               isCurrentUser: isCurrent,
               badge: u.activeTitle || (idx === 0 ? '👑 Líder' : idx === 1 ? '⚡ Top 2' : '🌟 Aluno'),
@@ -333,13 +349,14 @@ export const storageService = {
 
           // If current user is not in server list yet, append
           if (currentUser && currentUser.username && !mapped.some((e) => e.isCurrentUser)) {
+            const myRank = calculateRank(currentUser.xp || 0).currentRank;
             mapped.push({
               id: currentUser.syncCode || 'curr_user',
               name: currentUser.username,
               avatar: currentUser.avatarUrl,
               xp: currentUser.xp,
               streak: currentUser.streak,
-              league: 'Ouro',
+              league: myRank.name as any,
               rank: mapped.length + 1,
               isCurrentUser: true,
               badge: currentUser.activeTitle || '🚀 Aprendiz',
@@ -577,5 +594,123 @@ export const storageService = {
     } catch (err) {
       return { success: false, message: 'Erro ao resgatar recompensa.' };
     }
+  },
+
+  // -------------------------------------------------------------
+  // FRASES MONTADAS EM LIBRAS (MONTA FRASES)
+  // -------------------------------------------------------------
+  getSavedPhrases(): SavedPhraseItem[] {
+    try {
+      const stats = this.getUserStats();
+      const fromStats = Array.isArray(stats.savedPhrases) ? stats.savedPhrases : [];
+      let fromLocal: any[] = [];
+      try {
+        const raw = localStorage.getItem('librasgo_frases_salvas');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) fromLocal = parsed;
+        }
+      } catch {}
+
+      const map = new Map<string, SavedPhraseItem>();
+
+      [...fromStats, ...fromLocal].forEach((p: any) => {
+        if (p && p.id && Array.isArray(p.signIds) && p.signIds.length > 0) {
+          const item: SavedPhraseItem = {
+            id: String(p.id),
+            title: String(p.title || (Array.isArray(p.signNames) && p.signNames.length > 0 ? p.signNames.join(' ') : 'Frase em Libras')),
+            signIds: p.signIds.map(String),
+            signNames: Array.isArray(p.signNames) ? p.signNames.map(String) : undefined,
+            createdAt: p.createdAt || new Date().toISOString(),
+          };
+          if (!map.has(item.id)) {
+            map.set(item.id, item);
+          }
+        }
+      });
+
+      return Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    } catch {
+      return [];
+    }
+  },
+
+  savePhrase(phrase: { title?: string; signIds: string[]; signNames?: string[] }): SavedPhraseItem {
+    const list = this.getSavedPhrases();
+    const cleanTitle = phrase.title?.trim() || (phrase.signNames && phrase.signNames.length > 0 ? phrase.signNames.join(' ') : 'Frase em Libras');
+    const newItem: SavedPhraseItem = {
+      id: `fr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      title: cleanTitle,
+      signIds: phrase.signIds,
+      signNames: phrase.signNames,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [newItem, ...list.filter((p) => p.id !== newItem.id)].slice(0, 50);
+
+    try {
+      localStorage.setItem('librasgo_frases_salvas', JSON.stringify(updated));
+    } catch {}
+
+    try {
+      const stats = this.getUserStats();
+      const updatedStats: UserStats = {
+        ...stats,
+        savedPhrases: updated,
+      };
+      this.saveUserStats(updatedStats);
+      if (stats.username && stats.username !== 'Você (Aprendiz)') {
+        this.syncWithCloud(updatedStats).catch(() => {});
+      }
+    } catch {}
+
+    return newItem;
+  },
+
+  deletePhrase(phraseId: string): void {
+    const list = this.getSavedPhrases().filter((p) => p.id !== phraseId);
+
+    try {
+      localStorage.setItem('librasgo_frases_salvas', JSON.stringify(list));
+    } catch {}
+
+    try {
+      const stats = this.getUserStats();
+      const updatedStats: UserStats = {
+        ...stats,
+        savedPhrases: list,
+      };
+      this.saveUserStats(updatedStats);
+      if (stats.username && stats.username !== 'Você (Aprendiz)') {
+        this.syncWithCloud(updatedStats).catch(() => {});
+      }
+    } catch {}
+  },
+
+  updatePhraseTitle(phraseId: string, newTitle: string): void {
+    const list = this.getSavedPhrases().map((p) => {
+      if (p.id === phraseId) {
+        return { ...p, title: newTitle.trim() || p.title };
+      }
+      return p;
+    });
+
+    try {
+      localStorage.setItem('librasgo_frases_salvas', JSON.stringify(list));
+    } catch {}
+
+    try {
+      const stats = this.getUserStats();
+      const updatedStats: UserStats = {
+        ...stats,
+        savedPhrases: list,
+      };
+      this.saveUserStats(updatedStats);
+      if (stats.username && stats.username !== 'Você (Aprendiz)') {
+        this.syncWithCloud(updatedStats).catch(() => {});
+      }
+    } catch {}
   },
 };

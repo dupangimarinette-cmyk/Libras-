@@ -6,6 +6,8 @@ import { adminService } from '../services/adminService';
 import { shopService } from '../services/shopService';
 import { getProfileColorConfig } from '../data/themesData';
 import { ProfileAvatar } from './common/ProfileAvatar';
+import { calculateRank } from '../controllers/rankController';
+import { RankBadge } from './common/RankBadge';
 
 interface HeaderProps {
   stats: UserStats;
@@ -178,6 +180,18 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="text-[10px] text-slate-400 font-semibold leading-tight">Total XP</span>
                 <span className="text-xs font-black text-emerald-300 leading-tight">{stats.xp} XP</span>
               </div>
+            </div>
+
+            {/* Rank Badge */}
+            <div
+              onClick={() => {
+                audio.playClick();
+                onOpenProfile();
+              }}
+              className="hidden lg:flex items-center cursor-pointer hover:scale-105 transition-transform"
+              title={`Seu Rank: ${calculateRank(stats.xp).currentRank.name} (${stats.xp} XP)`}
+            >
+              <RankBadge rankId={calculateRank(stats.xp).currentRank.id} variant="compact" />
             </div>
 
             {/* Quick AR Camera Button */}

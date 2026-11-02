@@ -15,9 +15,10 @@ import { LoginView } from './components/Auth/LoginView';
 import { AdminDashboard, AdminTab } from './components/Admin/AdminDashboard';
 import { RedeemView } from './components/Redeem/RedeemView';
 import { SignupGateModal } from './components/Auth/SignupGateModal';
+import { MascotCompanion } from './components/Mascot/MascotCompanion';
 import { FeedbackView } from './components/Feedback/FeedbackView';
 
-import { UserStats, Lesson, LearningModule, DailyMission, LeaderboardEntry, MysteryChest, MascotItem, AdminSession, UserRole, SyncStatus, LibrasSign, TaughtSign, TaughtFacialExpression, FriendUser, WeeklyChallenge } from './types/libras';
+import { UserStats, Lesson, LearningModule, DailyMission, LeaderboardEntry, MysteryChest, MascotItem, AdminSession, UserRole, SyncStatus, LibrasSign, TaughtSign, TaughtFacialExpression, FriendUser, WeeklyChallenge, RankConfig } from './types/libras';
 import { storageService } from './services/storageService';
 import { adminService } from './services/adminService';
 import { contentService } from './services/contentService';
@@ -30,9 +31,12 @@ import { MASCOT_ITEMS } from './data/shopCatalogData';
 import { ChestRewardResult } from './components/Shop/ChestOpeningModal';
 import { getThemeConfig, applyThemeToDocument, applyProfileColorToDocument, getThemeBackgroundStyle } from './data/themesData';
 import { generateSyncCode } from './utils/syncCode';
+import { calculateRank, checkRankUpgrade } from './controllers/rankController';
+import { RankUpgradeModal } from './components/common/RankUpgradeModal';
 
 export default function App() {
   const [userStats, setUserStats] = useState<UserStats>(() => storageService.getUserStats());
+  const [rankCelebration, setRankCelebration] = useState<RankConfig | null>(null);
   const [adminSession, setAdminSession] = useState<AdminSession | null>(() => adminService.getAdminSession());
   const [adminTargetTab, setAdminTargetTab] = useState<AdminTab>('social');
   const [missions, setMissions] = useState<DailyMission[]>(() => storageService.getMissions());
@@ -176,12 +180,53 @@ export default function App() {
     applyProfileColorToDocument(userStats.profileColor || userStats.activeTheme);
   }, [userStats.profileColor, userStats.activeTheme]);
 
-  // Persist userStats changes
+  // Persist userStats changes and detect rank upgrades automatically (Bronze -> Prata -> Ouro -> Safira -> Diamante)
   const updateUserStats = (updater: (prev: UserStats) => UserStats) => {
     setUserStats((prev) => {
       const next = updater(prev);
-      storageService.saveUserStats(next);
-      return next;
+
+      // Automatic Rank Upgrade Check
+      const rankCheck = checkRankUpgrade(prev.xp, next.xp);
+      if (rankCheck.upgraded && rankCheck.newRank) {
+        const newRank = rankCheck.newRank;
+        const rewards = newRank.virtualRewards;
+        const alreadyClaimed = (next.claimedRankRewards || []).includes(newRank.id);
+
+        if (!alreadyClaimed) {
+          audio.playVictory();
+          setRankCelebration(newRank);
+
+          const addedGems = rewards?.gems || 0;
+          const updatedTitles = rewards?.title && !(next.unlockedTitles || []).includes(rewards.title)
+            ? [...(next.unlockedTitles || []), rewards.title]
+            : (next.unlockedTitles || []);
+
+          const nextWithRewards: UserStats = {
+            ...next,
+            currentRankId: newRank.id,
+            gems: next.gems + addedGems,
+            unlockedTitles: updatedTitles,
+            claimedRankRewards: [...(next.claimedRankRewards || []), newRank.id],
+          };
+
+          storageService.saveUserStats(nextWithRewards);
+          storageService.updateUserXpInLeaderboard(nextWithRewards.xp);
+          if (nextWithRewards.username) {
+            storageService.syncWithCloud(nextWithRewards, missions).catch(() => {});
+          }
+          return nextWithRewards;
+        }
+      }
+
+      // Ensure currentRankId matches current XP
+      const currentRankId = calculateRank(next.xp).currentRank.id;
+      const finalStats: UserStats = {
+        ...next,
+        currentRankId,
+      };
+
+      storageService.saveUserStats(finalStats);
+      return finalStats;
     });
   };
 
@@ -1258,6 +1303,21 @@ export default function App() {
       )}
 
       <SignupGateModal />
+
+      {rankCelebration && (
+        <RankUpgradeModal
+          rank={rankCelebration}
+          onClose={() => setRankCelebration(null)}
+        />
+      )}
+
+      <MascotCompanion
+        equipped={userStats.equippedMascot}
+        streak={userStats.streak}
+        hearts={userStats.hearts}
+        pendingMissions={pendingMissionsCount}
+        hidden={Boolean(activeLesson) || ['ar_lab', 'login', 'admin'].includes(activeTab)}
+      />
 
       {/* Bottom Sticky Navigation */}
       <Navigation

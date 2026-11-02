@@ -1,5 +1,32 @@
 import React, { useState } from 'react';
 
+// Animações do Lupi (mascote Golden Retriever). Cada estado do mascote usa uma animação:
+// comemoração (cheering): pulo, rabo rápido e brilhos; incentivo (encouraging): cabeça acenando;
+// boas-vindas (happy/hover): pata acenando; pensando (thinking): cabeça inclinada.
+const LUPI_CSS = `
+.lupi-breathe { animation: lupi-breathe 3.2s ease-in-out infinite; }
+.lupi-jump { animation: lupi-jump 0.8s ease-in-out infinite; }
+.lupi-tail { animation: lupi-wag 1.1s ease-in-out infinite alternate; }
+.lupi-tail-fast { animation-duration: 0.18s; }
+.lupi-tail-still { animation: none; }
+.lupi-nod { animation: lupi-nod 1.6s ease-in-out infinite; }
+.lupi-tilt { transform: rotate(-9deg); }
+.lupi-paw { animation: lupi-wave 2.8s ease-in-out infinite; }
+.lupi-paw-fast { animation: lupi-wave 0.5s ease-in-out infinite; }
+.lupi-paw-still { transform: rotate(0deg); }
+.lupi-spark { animation: lupi-spark 1.2s ease-in-out infinite; }
+@keyframes lupi-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025); } }
+@keyframes lupi-jump { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes lupi-wag { from { transform: rotate(-14deg); } to { transform: rotate(16deg); } }
+@keyframes lupi-nod { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-6deg) translateY(2px); } }
+@keyframes lupi-wave { 0%, 60%, 100% { transform: rotate(0deg); } 10%, 30% { transform: rotate(-24deg); } 20% { transform: rotate(-8deg); } }
+@keyframes lupi-spark { 0%, 100% { opacity: 0; transform: scale(0.3); } 50% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .lupi-breathe, .lupi-jump, .lupi-tail, .lupi-nod, .lupi-paw, .lupi-paw-fast, .lupi-spark { animation: none !important; }
+}
+`;
+
+
 export interface MascotEquipped {
   outfit?: string;
   hat?: string;
@@ -171,48 +198,125 @@ export const LibrinhaMascot: React.FC<LibrinhaMascotProps> = ({
           </g>
         );
 
-      case 'dragaozinho':
-        // Pequeno Draco: Friendly pink/red mini dragon with wings and horns
+      case 'dragaozinho': {
+        // Lupi: Golden Retriever 3D estilizado. O id 'dragaozinho' é mantido de propósito
+        // para não perder os mascotes já adquiridos pelos alunos.
+        const lupiBodyClass = mood === 'cheering' ? 'lupi-jump' : 'lupi-breathe';
+        const lupiTailClass =
+          mood === 'cheering' ? 'lupi-tail lupi-tail-fast' : mood === 'thinking' ? 'lupi-tail-still' : 'lupi-tail';
+        const lupiHeadClass = mood === 'encouraging' ? 'lupi-nod' : mood === 'thinking' ? 'lupi-tilt' : '';
+        const lupiPawClass =
+          mood === 'thinking' ? 'lupi-paw-still' : mood === 'cheering' ? 'lupi-paw-fast' : 'lupi-paw';
+
         return (
           <g>
-            <circle cx="60" cy="60" r="54" fill="#ec4899" fillOpacity="0.22" />
-            {/* Dragon Wings */}
-            <path
-              d="M 32 50 C 12 40, 16 68, 34 72 Z"
-              fill="#db2777"
-              stroke="#be185d"
-              strokeWidth="2.5"
-              className={isWaving || mood === 'cheering' ? 'animate-bounce' : ''}
-            />
-            <path
-              d="M 88 50 C 108 40, 104 68, 86 72 Z"
-              fill="#db2777"
-              stroke="#be185d"
-              strokeWidth="2.5"
-            />
-            {/* Dragon Body */}
-            <ellipse cx="60" cy="68" rx="26" ry="26" fill="#f43f5e" stroke="#be123c" strokeWidth="3" />
-            {/* Soft Cream Belly Plates */}
-            <ellipse cx="60" cy="74" rx="16" ry="17" fill="#fef2f2" />
-            <path d="M 50 68 Q 60 72 70 68" stroke="#fca5a5" strokeWidth="2" fill="none" />
-            <path d="M 48 76 Q 60 80 72 76" stroke="#fca5a5" strokeWidth="2" fill="none" />
-            {/* Head */}
-            <circle cx="60" cy="46" r="24" fill="#f43f5e" stroke="#be123c" strokeWidth="3" />
-            {/* Cute Yellow Horns */}
-            <polygon points="44,32 38,14 49,26" fill="#fbbf24" stroke="#d97706" strokeWidth="2" />
-            <polygon points="76,32 82,14 71,26" fill="#fbbf24" stroke="#d97706" strokeWidth="2" />
-            {/* Cute Big Eyes */}
-            <circle cx="50" cy="44" r="6" fill="#0f172a" />
-            <circle cx="70" cy="44" r="6" fill="#0f172a" />
-            <circle cx="48" cy="42" r="2.2" fill="#ffffff" />
-            <circle cx="68" cy="42" r="2.2" fill="#ffffff" />
-            {/* Dragon Snout / Smile */}
-            <ellipse cx="60" cy="54" rx="10" ry="7" fill="#fb7185" />
-            <circle cx="57" cy="52" r="1.5" fill="#be123c" />
-            <circle cx="63" cy="52" r="1.5" fill="#be123c" />
-            <path d="M 55 56 Q 60 60 65 56" stroke="#be123c" strokeWidth="1.8" fill="none" />
+            <style>{LUPI_CSS}</style>
+            <defs>
+              <radialGradient id="lupiFur" cx="38%" cy="30%" r="75%">
+                <stop offset="0%" stopColor="#fde68a" />
+                <stop offset="45%" stopColor="#f3b233" />
+                <stop offset="100%" stopColor="#b45309" />
+              </radialGradient>
+              <linearGradient id="lupiEar" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#f5c04a" />
+                <stop offset="100%" stopColor="#a16207" />
+              </linearGradient>
+            </defs>
+
+            {/* Sombra no chão */}
+            <ellipse cx="60" cy="112" rx="28" ry="4" fill="#0f172a" opacity="0.28" />
+
+            <g className={lupiBodyClass} style={{ transformOrigin: '60px 100px' }}>
+              {/* Rabo (atrás do corpo) */}
+              <g className={lupiTailClass} style={{ transformOrigin: '84px 86px' }}>
+                <path d="M 84 86 C 100 84, 106 70, 100 58" fill="none" stroke="#92400e" strokeWidth="11" strokeLinecap="round" />
+                <path d="M 84 86 C 100 84, 106 70, 100 58" fill="none" stroke="#f3b233" strokeWidth="7" strokeLinecap="round" />
+              </g>
+
+              {/* Corpo */}
+              <ellipse cx="60" cy="86" rx="27" ry="22" fill="url(#lupiFur)" stroke="#92400e" strokeWidth="2.5" />
+              <ellipse cx="60" cy="88" rx="16" ry="14" fill="#fef3c7" opacity="0.85" />
+
+              {/* Patas dianteiras */}
+              <rect x="37" y="98" width="12" height="13" rx="6" fill="url(#lupiFur)" stroke="#92400e" strokeWidth="2" />
+              <rect x="71" y="98" width="12" height="13" rx="6" fill="url(#lupiFur)" stroke="#92400e" strokeWidth="2" />
+              <ellipse cx="43" cy="110" rx="7" ry="3.5" fill="#fef3c7" stroke="#b45309" strokeWidth="1.5" />
+              <ellipse cx="77" cy="110" rx="7" ry="3.5" fill="#fef3c7" stroke="#b45309" strokeWidth="1.5" />
+
+              {/* Pata levantada (acenando: boas-vindas) */}
+              <g className={lupiPawClass} style={{ transformOrigin: '40px 92px' }}>
+                <path d="M 40 94 Q 26 84 27 68" fill="none" stroke="#92400e" strokeWidth="14" strokeLinecap="round" />
+                <path d="M 40 94 Q 26 84 27 68" fill="none" stroke="#f3b233" strokeWidth="10" strokeLinecap="round" />
+                <ellipse cx="27" cy="64" rx="7" ry="6.5" fill="#fef3c7" stroke="#b45309" strokeWidth="1.8" />
+              </g>
+
+              {/* Cabeça (orelhas caídas, focinho claro, olhos grandes) */}
+              <g className={lupiHeadClass} style={{ transformOrigin: '60px 70px' }}>
+                <path d="M 42 38 C 26 36, 22 56, 26 68 C 30 74, 40 72, 42 62 Z" fill="url(#lupiEar)" stroke="#78350f" strokeWidth="2" />
+                <path d="M 78 38 C 94 36, 98 56, 94 68 C 90 74, 80 72, 78 62 Z" fill="url(#lupiEar)" stroke="#78350f" strokeWidth="2" />
+                <circle cx="60" cy="48" r="24" fill="url(#lupiFur)" stroke="#92400e" strokeWidth="2.5" />
+                {/* Brilho e sombra para o efeito 3D */}
+                <ellipse cx="51" cy="31" rx="9" ry="4.5" fill="#ffffff" opacity="0.35" />
+                <path d="M 78 60 A 22 22 0 0 1 62 71" fill="none" stroke="#78350f" strokeWidth="4" opacity="0.22" strokeLinecap="round" />
+                <ellipse cx="60" cy="61" rx="13" ry="10" fill="#fef3c7" stroke="#d6a04a" strokeWidth="1.2" />
+                <ellipse cx="60" cy="55" rx="5.2" ry="3.6" fill="#1f2937" />
+                <ellipse cx="58.6" cy="54" rx="1.6" ry="0.9" fill="#ffffff" opacity="0.8" />
+                <path d="M 60 58.6 L 60 62" stroke="#1f2937" strokeWidth="1.8" />
+                {mood === 'cheering' ? (
+                  <>
+                    <path d="M 52 63 Q 60 73 68 63 Z" fill="#1f2937" />
+                    <ellipse cx="60" cy="69" rx="4" ry="3" fill="#f472b6" />
+                  </>
+                ) : (
+                  <path d="M 53 63 Q 56.5 66.5 60 62 Q 63.5 66.5 67 63" fill="none" stroke="#1f2937" strokeWidth="1.8" strokeLinecap="round" />
+                )}
+                {/* Sobrancelhas */}
+                <path d="M 42 37 Q 48 34 54 37" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" />
+                <path d="M 66 37 Q 72 34 78 37" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" />
+                {/* Olhos grandes e expressivos */}
+                <ellipse cx="49" cy="46" rx="6" ry="7" fill="#1f1305" />
+                <ellipse cx="71" cy="46" rx="6" ry="7" fill="#1f1305" />
+                <circle cx="47" cy="43" r="2.4" fill="#ffffff" />
+                <circle cx="69" cy="43" r="2.4" fill="#ffffff" />
+                <circle cx="51.5" cy="48.5" r="1" fill="#ffffff" />
+                <circle cx="73.5" cy="48.5" r="1" fill="#ffffff" />
+                {/* Bochechas */}
+                <circle cx="40" cy="57" r="4" fill="#fb7185" opacity="0.35" />
+                <circle cx="80" cy="57" r="4" fill="#fb7185" opacity="0.35" />
+              </g>
+
+              {/* Coleira azul com detalhes brancos (costura e plaquinha) */}
+              <path d="M 37 70 Q 60 81 83 70" fill="none" stroke="#1e3a8a" strokeWidth="8" strokeLinecap="round" />
+              <path d="M 37 69 Q 60 80 83 69" fill="none" stroke="#3b82f6" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 37 70 Q 60 81 83 70" fill="none" stroke="#ffffff" strokeWidth="1.6" strokeDasharray="3 3" />
+              <circle cx="60" cy="81" r="5.5" fill="#ffffff" stroke="#1d4ed8" strokeWidth="2" />
+              <circle cx="60" cy="81" r="2" fill="#1d4ed8" />
+            </g>
+
+            {/* Brilhos de comemoração */}
+            {mood === 'cheering' && (
+              <g>
+                {[
+                  [16, 26, 0],
+                  [104, 24, 0.25],
+                  [100, 98, 0.5],
+                ].map(([x, y, delay], i) => (
+                  <g key={i} transform={`translate(${x} ${y})`}>
+                    <path
+                      className="lupi-spark"
+                      style={{ animationDelay: `${delay}s`, transformOrigin: '0px 0px' }}
+                      d="M0 -6 L1.6 -1.6 L6 0 L1.6 1.6 L0 6 L-1.6 1.6 L-6 0 L-1.6 -1.6 Z"
+                      fill="#fde047"
+                      stroke="#ca8a04"
+                      strokeWidth="0.8"
+                    />
+                  </g>
+                ))}
+              </g>
+            )}
           </g>
         );
+      }
 
       case 'librinha':
       default:

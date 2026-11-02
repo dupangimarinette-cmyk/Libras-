@@ -178,7 +178,42 @@ export interface UserStats {
   weeklyChallenges?: WeeklyChallenge[];
   friendRequestsReceived?: FriendRequest[];
   friendRequestsSent?: string[];
+  // Frases montadas e salvas
+  savedPhrases?: SavedPhraseItem[];
+  // Ranks de Progressão (Bronze -> Prata -> Ouro -> Safira -> Diamante)
+  currentRankId?: RankId;
+  claimedRankRewards?: string[];
   createdAt?: string;
+}
+
+export type RankId = 'bronze' | 'prata' | 'ouro' | 'safira' | 'diamante';
+
+export interface RankConfig {
+  id: RankId;
+  name: string;
+  minXP: number;
+  maxXP: number | null;
+  color: string;
+  gradient: string;
+  glowColor: string;
+  borderClass: string;
+  bgClass: string;
+  badgeEmoji: string;
+  description: string;
+  virtualRewards: {
+    gems: number;
+    title?: string;
+    chestRarity?: 'raro' | 'epico' | 'lendario';
+    badgeName: string;
+  };
+}
+
+export interface SavedPhraseItem {
+  id: string;
+  title: string;
+  signIds: string[];
+  signNames?: string[];
+  createdAt: string;
 }
 
 export interface AdminRealtimeStats {

@@ -15,8 +15,8 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
-const DB_FILE = path.join(__dirname, 'sync_data.json');
-const ADMIN_STATE_FILE = path.join(__dirname, 'admin_state.json');
+const DB_FILE = path.join(__dirname, 'dados_alunos.json');
+const ADMIN_STATE_FILE = path.join(__dirname, 'dados_admin.json');
 
 // Persistência: Firestore (principal) ou arquivos JSON (reserva). Iniciada em startServer().
 let persistenceReady: Persistence = new Persistence(null, { dbFile: DB_FILE, adminFile: ADMIN_STATE_FILE });

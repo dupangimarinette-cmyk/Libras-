@@ -1,0 +1,101 @@
+import { RankConfig, RankId } from '../types/libras';
+
+export const RANKS_CONFIG: RankConfig[] = [
+  {
+    id: 'bronze',
+    name: 'Bronze',
+    minXP: 0,
+    maxXP: 99,
+    color: '#CD7F32',
+    gradient: 'from-amber-700 to-amber-900',
+    glowColor: 'shadow-amber-800/40',
+    borderClass: 'border-amber-700/60',
+    bgClass: 'bg-amber-950/40',
+    badgeEmoji: '🥉',
+    description: 'Nível inicial! Dando os primeiros passos no vocabulário e datilologia.',
+    virtualRewards: {
+      gems: 10,
+      title: 'Iniciante em Libras',
+      badgeName: 'Distintivo Bronze',
+    },
+  },
+  {
+    id: 'prata',
+    name: 'Prata',
+    minXP: 100,
+    maxXP: 499,
+    color: '#C0C0C0',
+    gradient: 'from-slate-300 to-slate-500',
+    glowColor: 'shadow-slate-400/30',
+    borderClass: 'border-slate-400/60',
+    bgClass: 'bg-slate-900/60',
+    badgeEmoji: '🥈',
+    description: 'Praticante dedicado! Vocabulário em expansão e parâmetros gramaticais.',
+    virtualRewards: {
+      gems: 25,
+      title: 'Praticante de Prata',
+      badgeName: 'Distintivo Prata',
+    },
+  },
+  {
+    id: 'ouro',
+    name: 'Ouro',
+    minXP: 500,
+    maxXP: 1199,
+    color: '#FFD700',
+    gradient: 'from-amber-400 via-yellow-500 to-amber-600',
+    glowColor: 'shadow-yellow-500/40',
+    borderClass: 'border-yellow-400',
+    bgClass: 'bg-yellow-950/30',
+    badgeEmoji: '🥇',
+    description: 'Sinalizador avançado! Fluência nas expressões e agilidade na datilologia.',
+    virtualRewards: {
+      gems: 50,
+      title: 'Campeão Dourado',
+      badgeName: 'Distintivo Ouro',
+    },
+  },
+  {
+    id: 'safira',
+    name: 'Safira',
+    minXP: 1200,
+    maxXP: 2499,
+    color: '#0F52BA',
+    gradient: 'from-blue-600 via-indigo-600 to-cyan-500',
+    glowColor: 'shadow-blue-500/50',
+    borderClass: 'border-blue-500',
+    bgClass: 'bg-blue-950/40',
+    badgeEmoji: '💎',
+    description: 'Domínio avançado e fluência intermediária em Libras!',
+    virtualRewards: {
+      gems: 150,
+      title: 'Mestre Safira',
+      chestRarity: 'raro',
+      badgeName: 'Distintivo Safira',
+    },
+  },
+  {
+    id: 'diamante',
+    name: 'Diamante',
+    minXP: 2500,
+    maxXP: null,
+    color: '#B9F2FF',
+    gradient: 'from-cyan-300 via-sky-400 to-indigo-400',
+    glowColor: 'shadow-cyan-400/50',
+    borderClass: 'border-cyan-300',
+    bgClass: 'bg-cyan-950/40',
+    badgeEmoji: '✨',
+    description: 'Mestre em Libras! Nível de engajamento e sinalização de elite.',
+    virtualRewards: {
+      gems: 300,
+      title: 'Lenda Diamante',
+      chestRarity: 'lendario',
+      badgeName: 'Distintivo Diamante',
+    },
+  },
+];
+
+export const RANKS_BY_ID: Record<RankId, RankConfig> = RANKS_CONFIG.reduce((acc, rank) => {
+  acc[rank.id] = rank;
+  return acc;
+}, {} as Record<RankId, RankConfig>);

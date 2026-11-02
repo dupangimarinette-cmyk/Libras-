@@ -1,0 +1,358 @@
+{
+  "LIB-7379": {
+    "syncCode": "LIB-7379",
+    "username": "Brenna Vitoria",
+    "userStats": {
+      "username": "Brenna Vitoria",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
+      "bio": "Aprendendo a Língua Brasileira de Sinais com Realidade Aumentada! 🤟",
+      "isLoggedIn": true,
+      "xp": 120,
+      "level": 2,
+      "streak": 2,
+      "lastActiveDate": "2026-10-24",
+      "hearts": 5,
+      "maxHearts": 5,
+      "gems": 80,
+      "completedLessonIds": [
+        "lesson_1"
+      ],
+      "claimedChestIds": [],
+      "signMastery": {},
+      "perfectSignsCount": 0,
+      "hasStreakFreeze": false,
+      "activeTheme": "neon-cyber",
+      "profileColor": "#10b981",
+      "soundEnabled": true,
+      "hapticEnabled": true,
+      "syncCode": "LIB-7379",
+      "lastCloudSynced": "2026-10-24T13:31:59.456Z",
+      "activeTitle": "Aprendiz Curioso",
+      "unlockedTitles": [
+        "Aprendiz Curioso"
+      ],
+      "unlockedMascotItems": [],
+      "equippedMascot": {
+        "outfit": "none",
+        "hat": "none",
+        "glasses": "none",
+        "skin": "skin_esmeralda"
+      },
+      "unlockedNameColors": [
+        "gold"
+      ],
+      "unopenedChestsCount": 0,
+      "redeemedPromoCodes": [],
+      "role": "learner",
+      "friends": [],
+      "friendRequestsReceived": [],
+      "weeklyChallenges": [
+        {
+          "id": "chal_1792847749002_4txd",
+          "challengerUsername": "Tester",
+          "challengerAvatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+          "targetUsername": "Brenna Vitoria",
+          "targetAvatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
+          "challengerXpAtStart": 500,
+          "targetXpAtStart": 120,
+          "goalXp": 300,
+          "weekStartDate": "2026-10-24T13:15:49.002Z",
+          "weekEndDate": "2026-10-31T13:15:49.002Z",
+          "xpReward": 300,
+          "gemsReward": 80,
+          "status": "em_andamento",
+          "isClaimed": false,
+          "userXpGained": 0,
+          "oppXpGained": 0
+        }
+      ]
+    },
+    "missions": [],
+    "taughtSigns": [],
+    "updatedAt": "2026-10-24T13:31:59.555Z"
+  },
+  "USER_brenna vitoria": {
+    "syncCode": "LIB-7379",
+    "username": "Brenna Vitoria",
+    "userStats": {
+      "username": "Brenna Vitoria",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
+      "bio": "Aprendendo a Língua Brasileira de Sinais com Realidade Aumentada! 🤟",
+      "isLoggedIn": true,
+      "xp": 120,
+      "level": 2,
+      "streak": 2,
+      "lastActiveDate": "2026-10-24",
+      "hearts": 5,
+      "maxHearts": 5,
+      "gems": 80,
+      "completedLessonIds": [
+        "lesson_1"
+      ],
+      "claimedChestIds": [],
+      "signMastery": {},
+      "perfectSignsCount": 0,
+      "hasStreakFreeze": false,
+      "activeTheme": "neon-cyber",
+      "profileColor": "#10b981",
+      "soundEnabled": true,
+      "hapticEnabled": true,
+      "syncCode": "LIB-7379",
+      "lastCloudSynced": "2026-10-24T13:31:59.456Z",
+      "activeTitle": "Aprendiz Curioso",
+      "unlockedTitles": [
+        "Aprendiz Curioso"
+      ],
+      "unlockedMascotItems": [],
+      "equippedMascot": {
+        "outfit": "none",
+        "hat": "none",
+        "glasses": "none",
+        "skin": "skin_esmeralda"
+      },
+      "unlockedNameColors": [
+        "gold"
+      ],
+      "unopenedChestsCount": 0,
+      "redeemedPromoCodes": [],
+      "role": "learner",
+      "friends": [],
+      "friendRequestsReceived": [],
+      "weeklyChallenges": [
+        {
+          "id": "chal_1792847749002_4txd",
+          "challengerUsername": "Tester",
+          "challengerAvatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+          "targetUsername": "Brenna Vitoria",
+          "targetAvatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
+          "challengerXpAtStart": 500,
+          "targetXpAtStart": 120,
+          "goalXp": 300,
+          "weekStartDate": "2026-10-24T13:15:49.002Z",
+          "weekEndDate": "2026-10-31T13:15:49.002Z",
+          "xpReward": 300,
+          "gemsReward": 80,
+          "status": "em_andamento",
+          "isClaimed": false,
+          "userXpGained": 0,
+          "oppXpGained": 0
+        }
+      ]
+    },
+    "missions": [],
+    "taughtSigns": [],
+    "updatedAt": "2026-10-24T13:31:59.555Z"
+  },
+  "LIB-ADMIN": {
+    "syncCode": "LIB-ADMIN",
+    "username": "admin",
+    "userStats": {
+      "username": "admin",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      "bio": "Painel de Administração do Sistema LibrasGo. 🛡️",
+      "isLoggedIn": true,
+      "role": "admin",
+      "activeTitle": "Administrador do Sistema",
+      "unlockedTitles": [
+        "Administrador do Sistema"
+      ],
+      "equippedFrame": "frame_ouro",
+      "unlockedFrames": [
+        "frame_bronze",
+        "frame_prata",
+        "frame_ouro"
+      ],
+      "xp": 600,
+      "level": 5,
+      "streak": 7,
+      "hearts": 5,
+      "maxHearts": 5,
+      "gems": 500,
+      "completedLessonIds": [
+        "lesson_1",
+        "lesson_2",
+        "lesson_3"
+      ],
+      "syncCode": "LIB-ADMIN",
+      "lastCloudSynced": "2026-10-31T22:39:04.885Z",
+      "unlockedMascotItems": [
+        "skin_esmeralda"
+      ],
+      "equippedMascot": {
+        "outfit": "none",
+        "hat": "none",
+        "glasses": "none",
+        "skin": "skin_esmeralda"
+      },
+      "unlockedNameColors": [
+        "gold"
+      ],
+      "friends": [],
+      "weeklyChallenges": [],
+      "createdAt": "2026-10-16T16:07:28.721Z"
+    },
+    "missions": [
+      {
+        "id": "mission_1",
+        "title": "Mestre da Visão Computacional",
+        "description": "Faça 2 sinais com precisão acima de 80% na câmera AR.",
+        "icon": "Scan",
+        "currentProgress": 1,
+        "targetProgress": 2,
+        "xpReward": 30,
+        "gemReward": 10,
+        "isCompleted": false,
+        "isClaimed": false
+      },
+      {
+        "id": "mission_2",
+        "title": "Ganho de Experiência",
+        "description": "Acumule 50 XP em lições ou desafios hoje.",
+        "icon": "Zap",
+        "currentProgress": 30,
+        "targetProgress": 50,
+        "xpReward": 40,
+        "gemReward": 15,
+        "isCompleted": false,
+        "isClaimed": false
+      },
+      {
+        "id": "mission_3",
+        "title": "Ritmo Implacável",
+        "description": "Complete 1 lição completa sem perder nenhum coração.",
+        "icon": "Flame",
+        "currentProgress": 0,
+        "targetProgress": 1,
+        "xpReward": 50,
+        "gemReward": 20,
+        "isCompleted": false,
+        "isClaimed": false
+      },
+      {
+        "id": "mission_4",
+        "title": "Explorador do Glossário",
+        "description": "Treine pelo menos 1 sinal novo no Laboratório Livre.",
+        "icon": "BookOpen",
+        "currentProgress": 1,
+        "targetProgress": 1,
+        "xpReward": 25,
+        "gemReward": 10,
+        "isCompleted": true,
+        "isClaimed": false
+      }
+    ],
+    "taughtSigns": [],
+    "taughtFacialExpressions": [],
+    "createdAt": "2026-10-16T16:07:28.721Z",
+    "updatedAt": "2026-10-31T22:39:04.992Z",
+    "authKeyHashes": [
+      "2a261b39b484832473e34ca3edaa9c24c515c932a458deafdac6e5d9615a8c10"
+    ]
+  },
+  "USER_admin": {
+    "syncCode": "LIB-ADMIN",
+    "username": "admin",
+    "userStats": {
+      "username": "admin",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      "bio": "Painel de Administração do Sistema LibrasGo. 🛡️",
+      "isLoggedIn": true,
+      "role": "admin",
+      "activeTitle": "Administrador do Sistema",
+      "unlockedTitles": [
+        "Administrador do Sistema"
+      ],
+      "equippedFrame": "frame_ouro",
+      "unlockedFrames": [
+        "frame_bronze",
+        "frame_prata",
+        "frame_ouro"
+      ],
+      "xp": 600,
+      "level": 5,
+      "streak": 7,
+      "hearts": 5,
+      "maxHearts": 5,
+      "gems": 500,
+      "completedLessonIds": [
+        "lesson_1",
+        "lesson_2",
+        "lesson_3"
+      ],
+      "syncCode": "LIB-ADMIN",
+      "lastCloudSynced": "2026-10-31T22:39:04.885Z",
+      "unlockedMascotItems": [
+        "skin_esmeralda"
+      ],
+      "equippedMascot": {
+        "outfit": "none",
+        "hat": "none",
+        "glasses": "none",
+        "skin": "skin_esmeralda"
+      },
+      "unlockedNameColors": [
+        "gold"
+      ],
+      "friends": [],
+      "weeklyChallenges": [],
+      "createdAt": "2026-10-16T16:07:28.721Z"
+    },
+    "missions": [
+      {
+        "id": "mission_1",
+        "title": "Mestre da Visão Computacional",
+        "description": "Faça 2 sinais com precisão acima de 80% na câmera AR.",
+        "icon": "Scan",
+        "currentProgress": 1,
+        "targetProgress": 2,
+        "xpReward": 30,
+        "gemReward": 10,
+        "isCompleted": false,
+        "isClaimed": false
+      },
+      {
+        "id": "mission_2",
+        "title": "Ganho de Experiência",
+        "description": "Acumule 50 XP em lições ou desafios hoje.",
+        "icon": "Zap",
+        "currentProgress": 30,
+        "targetProgress": 50,
+        "xpReward": 40,
+        "gemReward": 15,
+        "isCompleted": false,
+        "isClaimed": false
+      },
+      {
+        "id": "mission_3",
+        "title": "Ritmo Implacável",
+        "description": "Complete 1 lição completa sem perder nenhum coração.",
+        "icon": "Flame",
+        "currentProgress": 0,
+        "targetProgress": 1,
+        "xpReward": 50,
+        "gemReward": 20,
+        "isCompleted": false,
+        "isClaimed": false
+      },
+      {
+        "id": "mission_4",
+        "title": "Explorador do Glossário",
+        "description": "Treine pelo menos 1 sinal novo no Laboratório Livre.",
+        "icon": "BookOpen",
+        "currentProgress": 1,
+        "targetProgress": 1,
+        "xpReward": 25,
+        "gemReward": 10,
+        "isCompleted": true,
+        "isClaimed": false
+      }
+    ],
+    "taughtSigns": [],
+    "taughtFacialExpressions": [],
+    "createdAt": "2026-10-16T16:07:28.721Z",
+    "updatedAt": "2026-10-31T22:39:04.992Z",
+    "authKeyHashes": [
+      "2a261b39b484832473e34ca3edaa9c24c515c932a458deafdac6e5d9615a8c10"
+    ]
+  }
+}

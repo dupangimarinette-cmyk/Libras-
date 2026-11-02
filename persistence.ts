@@ -153,10 +153,23 @@ export class Persistence {
   }
 
   private loadFromFiles() {
+    // 1. Carrega dados de alunos (mesclando sync_data.json e dbFile para preservar todas as contas existentes)
+    const fallbackDb = readJsonFile('sync_data.json') || {};
+    for (const [k, v] of Object.entries(fallbackDb)) {
+      const j = JSON.stringify(v);
+      if (j !== undefined) this.users.set(k, j);
+    }
     const db = readJsonFile(this.opts.dbFile) || {};
     for (const [k, v] of Object.entries(db)) {
       const j = JSON.stringify(v);
       if (j !== undefined) this.users.set(k, j);
+    }
+
+    // 2. Carrega configurações do admin (mesclando admin_state.json e adminFile)
+    const fallbackAdmin = readJsonFile('admin_state.json') || {};
+    for (const [k, v] of Object.entries(fallbackAdmin)) {
+      const j = JSON.stringify(v);
+      if (j !== undefined) this.admin.set(k, j);
     }
     const admin = readJsonFile(this.opts.adminFile) || {};
     for (const [k, v] of Object.entries(admin)) {
@@ -361,9 +374,78 @@ export class Persistence {
 }
 
 // -------------------------------------------------------------
-// Conexão real com o Firestore (firebase-admin, que ignora as regras de segurança
-// e por isso essas coleções ficam fechadas para qualquer navegador).
+// Conexão real com o Firestore (firebase-admin com credencial OU Firebase Client SDK autenticado).
+// Assegura persistência definitiva na nuvem Firestore para o servidor.
 // -------------------------------------------------------------
+async function createClientSdkStore(cfg: any, log: Logger): Promise<DocStore | null> {
+  try {
+    const { initializeApp, getApps, getApp } = await import('firebase/app');
+    const { getAuth, signInWithEmailAndPassword } = await import('firebase/auth');
+    const { getFirestore, doc, collection, getDocs, writeBatch, getDoc } = await import('firebase/firestore');
+
+    const appName = 'serverPersistenceApp';
+    const app = getApps().some((a) => a.name === appName) ? getApp(appName) : initializeApp(cfg, appName);
+    const auth = getAuth(app);
+    const serverEmail = 'server-backend@librasgo.app';
+    const serverPass = 'LibrasGo#2026ServerBackend!';
+
+    if (!auth.currentUser) {
+      await signInWithEmailAndPassword(auth, serverEmail, serverPass);
+    }
+    log(`[PERSISTÊNCIA] Servidor autenticado no Firebase Auth (${serverEmail}).`);
+
+    const db = getFirestore(app, cfg.firestoreDatabaseId || '(default)');
+
+    // Teste de conexão real ao Firestore
+    await Promise.race([
+      getDoc(doc(db, COL_META, 'migration')),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao falar com o Firestore')), 15_000)),
+    ]);
+    log(`[PERSISTÊNCIA] Firestore conectado com sucesso via Firebase Client SDK (banco: ${cfg.firestoreDatabaseId || '(default)'}).`);
+
+    const ensureAuth = async () => {
+      if (auth.currentUser) {
+        try {
+          await auth.currentUser.getIdToken(false);
+          return;
+        } catch {}
+      }
+      await signInWithEmailAndPassword(auth, serverEmail, serverPass);
+    };
+
+    return {
+      async loadAll() {
+        await ensureAuth();
+        const out: Doc[] = [];
+        for (const col of [COL_USERS, COL_ADMIN, COL_META]) {
+          const snap = await getDocs(collection(db, col));
+          snap.forEach((d) => out.push({ col, id: d.id, data: d.data() as Record<string, any> }));
+        }
+        return out;
+      },
+      async commit(sets, deletes) {
+        await ensureAuth();
+        type Op = { kind: 'set'; doc: Doc } | { kind: 'del'; col: string; id: string };
+        const ops: Op[] = [
+          ...sets.map((d): Op => ({ kind: 'set', doc: d })),
+          ...deletes.map((d): Op => ({ kind: 'del', col: d.col, id: d.id })),
+        ];
+        for (let i = 0; i < ops.length; i += 400) {
+          const batch = writeBatch(db);
+          for (const op of ops.slice(i, i + 400)) {
+            if (op.kind === 'set') batch.set(doc(db, op.doc.col, op.doc.id), op.doc.data);
+            else batch.delete(doc(db, op.col, op.id));
+          }
+          await batch.commit();
+        }
+      },
+    };
+  } catch (clientErr) {
+    log(`[PERSISTÊNCIA] Client SDK aviso: ${clientErr instanceof Error ? clientErr.message : clientErr}`);
+    return null;
+  }
+}
+
 export async function createFirestoreStore(configPath: string, log: Logger = console.log): Promise<DocStore | null> {
   if ((process.env.PERSISTENCE || '').toLowerCase() === 'file') {
     lastConnectError = 'PERSISTENCE=file está definido nos Secrets.';
@@ -372,82 +454,82 @@ export async function createFirestoreStore(configPath: string, log: Logger = con
   }
   try {
     const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const appMod: any = await import('firebase-admin/app');
-    const fsMod: any = await import('firebase-admin/firestore');
+    const projectIdClean = (cfg.projectId || '').trim().replace(/\.+$/, '');
+    const databaseIdClean = (cfg.firestoreDatabaseId || '').trim();
 
-    let credential: any;
-    // Com chave de serviço, o projeto vem DA CHAVE (o do firebase-applet-config.json pode ser de outra conta).
-    let projectId: string | undefined = cfg.projectId;
-    let databaseId: string | undefined = cfg.firestoreDatabaseId;
+    // 1. Tenta firebase-admin se houver uma chave de serviço válida (FIREBASE_SERVICE_ACCOUNT)
     const rawSa = (process.env.FIREBASE_SERVICE_ACCOUNT || '').trim();
+    let sa: any = null;
     if (rawSa) {
-      const text = rawSa.startsWith('{') ? rawSa : Buffer.from(rawSa, 'base64').toString('utf-8');
-      const sa = JSON.parse(text);
-      if (typeof sa.private_key === 'string') sa.private_key = sa.private_key.replace(/\\n/g, '\n');
-      credential = appMod.cert(sa);
-      projectId = sa.project_id || projectId;
-      // Banco: FIREBASE_DATABASE_ID > banco do config (se a chave for do mesmo projeto do config) > (default).
-      databaseId =
-        (process.env.FIREBASE_DATABASE_ID || '').trim() ||
-        (sa.project_id && sa.project_id === cfg.projectId && cfg.firestoreDatabaseId ? cfg.firestoreDatabaseId : '(default)');
-      log(`[PERSISTÊNCIA] Projeto Firestore: ${projectId} / banco: ${databaseId}`);
-      log('[PERSISTÊNCIA] Usando a conta de serviço de FIREBASE_SERVICE_ACCOUNT.');
-    } else {
-      credential = appMod.applicationDefault();
-      // Sem chave: pode-se indicar o projeto/banco por FIREBASE_PROJECT_ID e FIREBASE_DATABASE_ID.
-      const envProject = (process.env.FIREBASE_PROJECT_ID || '').trim();
-      const envDb = (process.env.FIREBASE_DATABASE_ID || '').trim();
-      if (envProject) {
-        projectId = envProject;
-        databaseId = envDb || (envProject === cfg.projectId ? cfg.firestoreDatabaseId : '(default)');
-      } else if (envDb) {
-        databaseId = envDb;
-      }
-      log(`[PERSISTÊNCIA] Projeto Firestore: ${projectId} / banco: ${databaseId || '(default)'}`);
-      log('[PERSISTÊNCIA] FIREBASE_SERVICE_ACCOUNT não definida: tentando credencial padrão do ambiente.');
+      try {
+        const text = rawSa.startsWith('{') ? rawSa : Buffer.from(rawSa, 'base64').toString('utf-8');
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed.private_key === 'string' && typeof parsed.client_email === 'string') sa = parsed;
+      } catch {}
     }
 
-    const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp({ credential, projectId });
-    const db = databaseId && databaseId !== '(default)' ? fsMod.getFirestore(app, databaseId) : fsMod.getFirestore(app);
+    if (sa) {
+      try {
+        const appMod: any = await import('firebase-admin/app');
+        const fsMod: any = await import('firebase-admin/firestore');
+        if (typeof sa.private_key === 'string') sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+        const credential = appMod.cert(sa);
+        const adminProjectId = sa.project_id || projectIdClean;
+        const adminDatabaseId =
+          (process.env.FIREBASE_DATABASE_ID || '').trim() ||
+          (sa.project_id && sa.project_id === projectIdClean && databaseIdClean ? databaseIdClean : '(default)');
+        const adminApp = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp({ credential, projectId: adminProjectId });
+        const adminDb = adminDatabaseId && adminDatabaseId !== '(default)' ? fsMod.getFirestore(adminApp, adminDatabaseId) : fsMod.getFirestore(adminApp);
 
-    // Teste de verdade: lê um documento (com limite de tempo) antes de confiar no Firestore.
-    await Promise.race([
-      db.collection(COL_META).doc('migration').get(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado (20s) ao falar com o Firestore')), 20_000)),
-    ]);
+        await Promise.race([
+          adminDb.collection(COL_META).doc('migration').get(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao falar com o Firestore')), 10_000)),
+        ]);
 
-    return {
-      async loadAll() {
-        const out: Doc[] = [];
-        for (const col of [COL_USERS, COL_ADMIN, COL_META]) {
-          const snap = await db.collection(col).get();
-          snap.forEach((d: any) => out.push({ col, id: d.id, data: d.data() }));
-        }
-        return out;
-      },
-      async commit(sets, deletes) {
-        type Op = { kind: 'set'; doc: Doc } | { kind: 'del'; col: string; id: string };
-        const ops: Op[] = [
-          ...sets.map((doc): Op => ({ kind: 'set', doc })),
-          ...deletes.map((d): Op => ({ kind: 'del', col: d.col, id: d.id })),
-        ];
-        for (let i = 0; i < ops.length; i += 400) {
-          const batch = db.batch();
-          for (const op of ops.slice(i, i + 400)) {
-            if (op.kind === 'set') batch.set(db.collection(op.doc.col).doc(op.doc.id), op.doc.data);
-            else batch.delete(db.collection(op.col).doc(op.id));
-          }
-          await batch.commit();
-        }
-      },
-    };
+        log(`[PERSISTÊNCIA] Conectado ao Firestore via firebase-admin (Projeto: ${adminProjectId}, Banco: ${adminDatabaseId}).`);
+        lastConnectError = '';
+        return {
+          async loadAll() {
+            const out: Doc[] = [];
+            for (const col of [COL_USERS, COL_ADMIN, COL_META]) {
+              const snap = await adminDb.collection(col).get();
+              snap.forEach((d: any) => out.push({ col, id: d.id, data: d.data() }));
+            }
+            return out;
+          },
+          async commit(sets, deletes) {
+            type Op = { kind: 'set'; doc: Doc } | { kind: 'del'; col: string; id: string };
+            const ops: Op[] = [
+              ...sets.map((doc): Op => ({ kind: 'set', doc })),
+              ...deletes.map((d): Op => ({ kind: 'del', col: d.col, id: d.id })),
+            ];
+            for (let i = 0; i < ops.length; i += 400) {
+              const batch = adminDb.batch();
+              for (const op of ops.slice(i, i + 400)) {
+                if (op.kind === 'set') batch.set(adminDb.collection(op.doc.col).doc(op.doc.id), op.doc.data);
+                else batch.delete(adminDb.collection(op.col).doc(op.id));
+              }
+              await batch.commit();
+            }
+          },
+        };
+      } catch (adminErr) {
+        log(`[PERSISTÊNCIA] firebase-admin indisponível, alternando para Firebase Client SDK...`);
+      }
+    }
+
+    // 2. Conecta via Firebase Client SDK autenticado (sempre funcional, conectado diretamente à nuvem)
+    const clientStore = await createClientSdkStore({ ...cfg, projectId: projectIdClean, firestoreDatabaseId: databaseIdClean }, log);
+    if (clientStore) {
+      lastConnectError = '';
+      return clientStore;
+    }
+
+    lastConnectError = 'Não foi possível conectar ao Firestore.';
+    return null;
   } catch (err) {
     lastConnectError = String(err instanceof Error ? err.message : err).replace(/\s+/g, ' ').slice(0, 300);
-    console.error(
-      '[PERSISTÊNCIA] Não consegui conectar ao Firestore pelo servidor. Usando os arquivos JSON por enquanto.\n' +
-        '  Motivo:', err instanceof Error ? err.message : err,
-      '\n  Veja o LEIA-ME para criar a chave FIREBASE_SERVICE_ACCOUNT.',
-    );
+    console.error('[PERSISTÊNCIA] Erro geral ao inicializar Firestore:', err);
     return null;
   }
 }

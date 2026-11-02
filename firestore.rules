@@ -94,9 +94,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // As coleções syncUsers, adminState e meta são do SERVIDOR (firebase-admin ignora estas regras).
-    // Ficam fechadas para qualquer navegador pelo "negar tudo" lá de cima: guardam hashes de chaves e senha do admin.
-    // NUNCA crie uma regra de leitura para elas.
+    // Coleções do Servidor (syncUsers, adminState, meta) - acessíveis apenas pelo servidor autenticado (@librasgo.app)
+    match /syncUsers/{docId} {
+      allow read, write: if isSignedIn() && request.auth.token.email.matches('.*@librasgo\\.app$');
+    }
+    match /adminState/{docId} {
+      allow read, write: if isSignedIn() && request.auth.token.email.matches('.*@librasgo\\.app$');
+    }
+    match /meta/{docId} {
+      allow read, write: if isSignedIn() && request.auth.token.email.matches('.*@librasgo\\.app$');
+    }
 
     // 5. Admins list
     match /admins/{adminId} {

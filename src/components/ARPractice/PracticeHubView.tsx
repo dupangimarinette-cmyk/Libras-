@@ -10,15 +10,17 @@ import {
   Flame,
   Award,
   Compass,
+  MessageSquareText,
 } from 'lucide-react';
 import { ARCameraView } from './ARCameraView';
 import { FacialPracticeView } from './FacialPracticeView';
 import { AITeachSignView } from './AITeachSignView';
 import { AITeachFacialView } from './AITeachFacialView';
+import { PhraseBuilderView } from './PhraseBuilderView';
 import { UserStats, LibrasSign } from '../../types/libras';
 import { audio } from '../../services/audioService';
 
-export type PracticeTabMode = 'facial' | 'teach_facial' | 'signs_ar' | 'teach_ai';
+export type PracticeTabMode = 'facial' | 'teach_facial' | 'signs_ar' | 'teach_ai' | 'phrases';
 
 interface PracticeHubViewProps {
   userStats: UserStats;
@@ -134,6 +136,22 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
             <Bot className="w-4 h-4" />
             <span>Ensinar Sinais à IA</span>
           </button>
+
+          {/* Tab 5: Montar Frase */}
+          <button
+            onClick={() => {
+              audio.playClick();
+              setActiveMode('phrases');
+            }}
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 whitespace-nowrap flex-shrink-0 ${
+              activeMode === 'phrases'
+                ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/30 scale-102'
+                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
+            }`}
+          >
+            <MessageSquareText className="w-4 h-4" />
+            <span>Montar Frase</span>
+          </button>
         </div>
       </div>
 
@@ -184,6 +202,14 @@ export const PracticeHubView: React.FC<PracticeHubViewProps> = ({
               onSignCompleted={onSignCompletedInAR}
             />
           </div>
+        )}
+
+        {activeMode === 'phrases' && (
+          <PhraseBuilderView
+            signs={signs}
+            userStats={userStats}
+            onSignCompleted={onSignCompletedInAR}
+          />
         )}
 
         {activeMode === 'teach_ai' && (
