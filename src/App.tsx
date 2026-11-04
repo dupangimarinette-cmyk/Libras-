@@ -9,6 +9,7 @@ import { LeaderboardView } from './components/Leaderboard/LeaderboardView';
 import { LibrasDexView } from './components/LibrasDex/LibrasDexView';
 import { MissionsView } from './components/Missions/MissionsView';
 import { ShopView } from './components/Shop/ShopView';
+import { DailyBonusView } from './components/DailyBonus/DailyBonusView';
 import { AboutView } from './components/About/AboutView';
 import { ProfileView } from './components/Profile/ProfileView';
 import { LoginView } from './components/Auth/LoginView';
@@ -45,7 +46,7 @@ export default function App() {
   const [activeTab, setActiveTabState] = useState<TabType>(() => {
     try {
       const saved = sessionStorage.getItem('librasgo_active_tab');
-      const validTabs: TabType[] = ['path', 'ar_lab', 'leaderboard', 'glossary', 'profile', 'login', 'missions', 'shop', 'about', 'admin', 'redeem', 'feedback'];
+      const validTabs: TabType[] = ['path', 'ar_lab', 'leaderboard', 'glossary', 'profile', 'login', 'missions', 'shop', 'about', 'admin', 'redeem', 'daily_bonus', 'feedback'];
       if (saved && validTabs.includes(saved as TabType)) {
         return saved as TabType;
       }
@@ -1190,6 +1191,17 @@ export default function App() {
             }}
             onOpenMysteryChest={handleOpenMysteryChest}
             onEquipTitle={handleEquipTitle}
+          />
+        )}
+
+        {activeTab === 'daily_bonus' && (
+          <DailyBonusView
+            userStats={userStats}
+            onStatsUpdated={(updatedStats) => {
+              setUserStats(updatedStats);
+              storageService.saveUserStats(updatedStats);
+              storageService.updateUserXpInLeaderboard(updatedStats.xp);
+            }}
           />
         )}
 

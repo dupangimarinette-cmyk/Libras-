@@ -47,6 +47,18 @@ export function storeUserKey(ids: Identity[], key: string): void {
 }
 
 /** fetch para rotas do aluno: envia a chave e guarda a que o servidor devolver (`authKey`). */
+/** Lê a resposta como JSON. Se o servidor devolver HTML ou texto (ex.: erro 502), mostra uma mensagem clara. */
+export async function readJsonResponse<T = any>(res: Response): Promise<T> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(
+      `O servidor respondeu fora do formato esperado (HTTP ${res.status}). Tente novamente em alguns minutos.`
+    );
+  }
+}
+
 export async function userFetch(input: string, init: RequestInit = {}, identity: Identity = {}): Promise<Response> {
   const headers = new Headers(init.headers || {});
   const key = getUserKey(identity);

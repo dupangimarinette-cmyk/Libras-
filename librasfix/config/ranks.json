@@ -1,0 +1,46 @@
+{
+  "ranks": [
+    {
+      "id": "bronze",
+      "name": "Bronze",
+      "minXP": 0,
+      "maxXP": 99,
+      "color": "#CD7F32",
+      "badge": "assets/ranks/bronze.svg"
+    },
+    {
+      "id": "prata",
+      "name": "Prata",
+      "minXP": 100,
+      "maxXP": 499,
+      "color": "#C0C0C0",
+      "badge": "assets/ranks/prata.svg"
+    },
+    {
+      "id": "ouro",
+      "name": "Ouro",
+      "minXP": 500,
+      "maxXP": 1199,
+      "color": "#FFD700",
+      "badge": "assets/ranks/ouro.svg"
+    },
+    {
+      "id": "safira",
+      "name": "Safira",
+      "minXP": 1200,
+      "maxXP": 2499,
+      "color": "#0F52BA",
+      "badge": "assets/ranks/safira.svg",
+      "description": "Domínio avançado e fluência intermediária em Libras!"
+    },
+    {
+      "id": "diamante",
+      "name": "Diamante",
+      "minXP": 2500,
+      "maxXP": null,
+      "color": "#B9F2FF",
+      "badge": "assets/ranks/diamante.svg",
+      "description": "Mestre em Libras! Nível de engajamento e sinalização de elite."
+    }
+  ]
+}

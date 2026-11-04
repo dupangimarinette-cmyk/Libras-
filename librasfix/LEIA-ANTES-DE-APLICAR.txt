@@ -1,0 +1,19 @@
+LIBRASGO — PATCH DE CORREÇÃO DO BÔNUS DIÁRIO
+
+Base: LibrasGo_Clube_Premium.zip (arquivo mais recente localizado no projeto).
+
+CONTEÚDO
+- server.ts
+- src/services/shopService.ts
+- CORRECAO_BONUS_DIARIO.md
+
+COMO APLICAR COM SEGURANÇA
+1. Faça uma cópia/backup do projeto atual antes de começar.
+2. Extraia este ZIP em uma pasta separada.
+3. Copie SOMENTE server.ts e src/services/shopService.ts para os mesmos caminhos do projeto atual, substituindo esses dois arquivos.
+4. NÃO substitua sync_data.json, admin_state.json, arquivos de backup, .env, credenciais ou regras do Firebase.
+5. No Google AI Studio, confira as alterações e execute o build/testes antes de publicar.
+6. Teste o resgate com uma conta real e confirme que o saldo aumenta uma única vez e continua correto após sair e entrar novamente.
+
+IMPORTANTE
+Este é um patch de código, não uma publicação automática. Ele não altera o beta online por conta própria. O build e o teste com conta real ainda precisam ser feitos no ambiente do projeto.

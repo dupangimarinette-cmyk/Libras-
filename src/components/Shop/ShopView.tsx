@@ -76,9 +76,6 @@ export const ShopView: React.FC<ShopViewProps> = ({
   // How to earn diamonds info modal
   const [showEarnInfoModal, setShowEarnInfoModal] = useState(false);
 
-  // Daily bonus claim state
-  const [isClaimingDaily, setIsClaimingDaily] = useState(false);
-
   // Active opening chest modal
   const [openingChest, setOpeningChest] = useState<{
     chest: MysteryChest;
@@ -94,9 +91,6 @@ export const ShopView: React.FC<ShopViewProps> = ({
     glasses: 'none',
     skin: 'skin_esmeralda',
   };
-
-  const today = new Date().toISOString().split('T')[0];
-  const isDailyClaimedToday = userStats.lastDailyRewardDate === today;
 
   // Toast helper
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
@@ -139,26 +133,6 @@ export const ShopView: React.FC<ShopViewProps> = ({
       onServerPurchaseSuccess(res.updatedUserStats, res.message);
     } else {
       showToast('❌ ' + (res.message || 'Falha ao processar compra no servidor.'), 'error');
-    }
-  };
-
-  // Claim Daily Diamond Bonus from Server
-  const handleClaimDailyBonus = async () => {
-    audio.playClick();
-    setIsClaimingDaily(true);
-    const res = await shopService.claimDailyBonus(userStats.username, userStats.syncCode);
-    setIsClaimingDaily(false);
-
-    if (res.success && res.updatedUserStats) {
-      confetti({
-        particleCount: 65,
-        spread: 75,
-        origin: { y: 0.5 },
-      });
-      showToast('🎁 ' + res.message);
-      onServerPurchaseSuccess(res.updatedUserStats, res.message);
-    } else {
-      showToast('ℹ️ ' + (res.message || 'Bônus diário indisponível no momento.'), 'error');
     }
   };
 
@@ -237,7 +211,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
             </p>
           </div>
 
-          {/* Diamond Balance & Daily Reward Claim Card */}
+          {/* Diamond Balance Card */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             
             {/* Diamond Balance Widget */}
@@ -254,26 +228,6 @@ export const ShopView: React.FC<ShopViewProps> = ({
                 </span>
               </div>
             </div>
-
-            {/* Daily Diamond Bonus Button */}
-            <button
-              disabled={isDailyClaimedToday || isClaimingDaily}
-              onClick={handleClaimDailyBonus}
-              className={`p-3.5 sm:p-4 rounded-2xl font-black text-xs transition-all cursor-pointer flex flex-col justify-center items-start shadow-xl border ${
-                isDailyClaimedToday
-                  ? 'bg-slate-950/60 border-slate-800 text-slate-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 border-yellow-300 hover:scale-103 active:scale-97 shadow-amber-500/30 animate-pulse'
-              }`}
-              title={isDailyClaimedToday ? 'Bônus diário já resgatado hoje' : 'Clique para resgatar Diamantes grátis!'}
-            >
-              <div className="flex items-center gap-1.5 font-black uppercase text-[10px]">
-                <Gift className="w-3.5 h-3.5" />
-                <span>Bônus Diário</span>
-              </div>
-              <span className="text-xs font-bold mt-0.5">
-                {isDailyClaimedToday ? 'Resgatado Hoje ✓' : '+35 a +65 Diamantes!'}
-              </span>
-            </button>
 
             {/* How to Earn Modal Trigger */}
             <button
@@ -1156,8 +1110,8 @@ export const ShopView: React.FC<ShopViewProps> = ({
               <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center gap-3">
                 <span className="text-xl">📅</span>
                 <div>
-                  <strong className="text-white block">Missões Diárias & Bônus de Sequência</strong>
-                  <span className="text-slate-400">Resgate seu bônus diário gratuito todos os dias na Loja.</span>
+                  <strong className="text-white block">Missões Diárias & Sequência</strong>
+                  <span className="text-slate-400">Complete missões todos os dias para ganhar recompensas.</span>
                 </div>
               </div>
 

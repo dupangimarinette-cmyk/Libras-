@@ -8,6 +8,7 @@ import {
   LogIn,
   Shield,
   Gift,
+  CalendarCheck,
   MessageSquare,
   MoreHorizontal,
   X,
@@ -29,6 +30,7 @@ export type TabType =
   | 'about'
   | 'admin'
   | 'redeem'
+  | 'daily_bonus'
   | 'feedback';
 
 interface NavigationProps {
@@ -64,6 +66,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { id: 'glossary', label: 'LibrasDex', icon: BookOpen, color: 'text-indigo-400', description: 'Dicionário de sinais e parâmetros' },
     { id: 'profile', label: 'Perfil', icon: User, color: 'text-emerald-400', description: 'Progresso, títulos e temas' },
     { id: 'redeem', label: 'Resgate', icon: Gift, color: 'text-fuchsia-400', description: 'Códigos promocionais e recompensas' },
+    { id: 'daily_bonus', label: 'Bônus Diário', icon: CalendarCheck, color: 'text-amber-400', description: 'Resgate seus diamantes todos os dias' },
     { id: 'feedback', label: 'Feedbacks', icon: MessageSquare, color: 'text-teal-400', description: 'Canal direto com a administração' },
     { id: 'login', label: 'Login', icon: LogIn, color: 'text-violet-400', description: 'Acesso e troca de conta' },
     { id: 'admin', label: 'Admin', icon: Shield, color: 'text-indigo-400', description: 'Painel de controle e moderação' },
@@ -101,7 +104,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 gap-2.5">
               {allTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -129,7 +132,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <span className="text-xs font-black block truncate">{tab.label}</span>
-                      <span className="text-[10px] text-slate-400 block truncate leading-tight">
+                      <span className="text-[10px] text-slate-400 block leading-tight">
                         {tab.description || 'Navegar'}
                       </span>
                     </div>

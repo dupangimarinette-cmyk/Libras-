@@ -1411,6 +1411,52 @@ app.post('/api/ai/validate-facial-expression', (req: Request, res: Response) => 
 });
 
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+// CLUBE PREMIUM — compra com diamantes virtuais (preços oficiais no servidor)
+// -------------------------------------------------------------
+const PREMIUM_PLAN_CATALOG = {
+  mensal: { name: 'Premium Mensal', cost: 3000, days: 30 },
+  anual: { name: 'Premium Anual', cost: 25000, days: 365 },
+  vitalicio: { name: 'Premium Vitalício', cost: 100000, days: null },
+} as const;
+
+app.post('/api/shop/premium-plan', (req: Request, res: Response) => {
+  const { username, syncCode, plan } = req.body || {};
+  if (!['mensal', 'anual', 'vitalicio'].includes(String(plan))) {
+    return res.status(400).json({ success: false, message: 'Plano Premium inválido.' });
+  }
+  const db = readSyncDb();
+  const userKey = username ? `USER_${String(username).toLowerCase()}` : (syncCode ? String(syncCode).toUpperCase() : null);
+  if (!userKey) return res.status(400).json({ success: false, message: 'Identificação do usuário necessária.' });
+  const auth = authorizeUser(req, db, username, syncCode);
+  if (!auth.ok) return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
+  const userRecord = db[userKey];
+  if (!userRecord?.userStats) return res.status(404).json({ success: false, message: 'Perfil do usuário não encontrado.' });
+  const stats = userRecord.userStats;
+  const selected = PREMIUM_PLAN_CATALOG[plan as keyof typeof PREMIUM_PLAN_CATALOG];
+  const now = Date.now();
+  const currentExpiry = stats.premiumExpiresAt ? new Date(stats.premiumExpiresAt).getTime() : 0;
+  const currentlyLifetime = stats.premiumPlan === 'vitalicio';
+  if (currentlyLifetime) return res.status(409).json({ success: false, message: 'Sua conta já possui Premium vitalício.' });
+  if (plan !== 'vitalicio' && stats.premiumPlan === plan && currentExpiry > now) {
+    // Renovação permitida: acrescenta a duração ao vencimento atual.
+  }
+  const balance = Number(stats.gems) || 0;
+  if (balance < selected.cost) return res.status(400).json({ success: false, message: `Diamantes insuficientes. Você tem ${balance} 💎 e precisa de ${selected.cost} 💎.`, currentBalance: balance, required: selected.cost });
+  const base = Math.max(now, Number.isFinite(currentExpiry) ? currentExpiry : 0);
+  const expiresAt = selected.days === null ? null : new Date(base + selected.days * 86400000).toISOString();
+  stats.gems = balance - selected.cost;
+  stats.premiumPlan = plan;
+  stats.premiumExpiresAt = expiresAt;
+  if (!Array.isArray(stats.premiumPurchaseHistory)) stats.premiumPurchaseHistory = [];
+  stats.premiumPurchaseHistory.push({ plan, purchasedAt: new Date(now).toISOString(), expiresAt, costDiamonds: selected.cost });
+  userRecord.updatedAt = new Date().toISOString();
+  const issuedKey = finalizeUserKey(db, Array.from(new Set([userKey, ...auth.keys])), userRecord, auth.hashes);
+  writeSyncDb(db);
+  logAdminAction('Compra de Plano Premium', `Usuário "${stats.username}" adquiriu ${selected.name} por ${selected.cost} diamantes.`, 'Clube Premium');
+  return res.json({ success: true, message: `${selected.name} ativado!`, updatedUserStats: stats, remainingBalance: stats.gems, authKey: issuedKey });
+});
+
 // SERVER-AUTHORITATIVE PREMIUM SHOP PURCHASES
 // Somente o servidor valida saldos, compras e alterações de inventário.
 // -------------------------------------------------------------
@@ -1611,47 +1657,92 @@ app.post('/api/shop/purchase', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 // DAILY REWARD DIAMONDS CLAIM (SERVER-AUTHORITATIVE)
 // -------------------------------------------------------------
-app.post('/api/rewards/daily-claim', (req: Request, res: Response) => {
-  const { username, syncCode } = req.body;
+// Mesma rota com dois caminhos: o antigo (mantido) e um neutro usado pelo app.
+app.post(['/api/rewards/daily-claim', '/api/bonus/resgatar-diario'], (req: Request, res: Response) => {
+  const { username, syncCode } = req.body || {};
   const db = readSyncDb();
-  const userKey = username ? `USER_${username.toLowerCase()}` : (syncCode ? syncCode.toUpperCase() : null);
 
-  if (!userKey || !db[userKey]) {
-    return res.status(400).json({ success: false, message: 'Usuário não localizado para resgate do bônus diário.' });
-  }
-
+  // Resolver a conta por qualquer identificador válido. A versão anterior exigia
+  // USER_<nome> mesmo quando o registro existente estava disponível pelo syncCode.
+  const requestedKeys = normalizeAccountKeys(username, syncCode);
   const auth = authorizeUser(req, db, username, syncCode);
   if (!auth.ok) {
     return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
   }
 
-  const userRecord = db[userKey];
-  const stats = userRecord.userStats;
-  if (!stats) {
-    return res.status(400).json({ success: false, message: 'Estatísticas do usuário indisponíveis.' });
-  }
-
-  const today = new Date().toISOString().split('T')[0];
-  if (stats.lastDailyRewardDate === today) {
-    return res.status(400).json({
+  const accountKeys = Array.from(new Set([...requestedKeys, ...auth.keys])).filter((key) => !!db[key]);
+  if (accountKeys.length === 0) {
+    return res.status(404).json({
       success: false,
-      message: 'Você já resgatou o seu Bônus Diário de Diamantes hoje! Volte amanhã para continuar sua sequência.',
+      code: 'ACCOUNT_NOT_FOUND',
+      message: 'Não encontramos esta conta pelo nome nem pelo código de sincronização. Entre novamente ou restaure sua conta pelo código.',
     });
   }
 
-  const streak = Number(stats.streak) || 1;
-  const bonus = 30 + Math.min(streak, 7) * 5;
+  // As chaves USER_ e LIB- podem conter cópias da mesma conta. Usar a mais recente
+  // evita creditar uma cópia antiga e devolver um saldo divergente ao aplicativo.
+  const userRecord = accountKeys
+    .map((key) => db[key])
+    .filter((record) => record && record.userStats)
+    .sort((a, b) => (Date.parse(b.updatedAt || '') || 0) - (Date.parse(a.updatedAt || '') || 0))[0];
 
+  if (!userRecord || !userRecord.userStats) {
+    return res.status(409).json({
+      success: false,
+      code: 'USER_STATS_MISSING',
+      message: 'A conta foi localizada, mas suas estatísticas não estão disponíveis para o resgate. Sincronize a conta e tente novamente.',
+    });
+  }
+
+  const stats = { ...userRecord.userStats };
+  // O aplicativo é destinado principalmente ao público brasileiro; usar a data local
+  // de São Paulo evita divergência entre o dia exibido no aparelho e o dia UTC do servidor.
+  const dateParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const part = (type: string) => dateParts.find((item) => item.type === type)?.value || '';
+  const today = `${part('year')}-${part('month')}-${part('day')}`;
+
+  if (stats.lastDailyRewardDate === today) {
+    return res.status(409).json({
+      success: false,
+      code: 'DAILY_ALREADY_CLAIMED',
+      message: 'Você já resgatou o seu Bônus Diário de Diamantes hoje! Volte amanhã para continuar sua sequência.',
+      updatedUserStats: stats,
+    });
+  }
+
+  const streak = Math.max(1, Number(stats.streak) || 1);
+  const bonus = 30 + Math.min(streak, 7) * 5;
   stats.gems = (Number(stats.gems) || 0) + bonus;
   stats.lastDailyRewardDate = today;
-  userRecord.updatedAt = new Date().toISOString();
 
-  const issuedKey = finalizeUserKey(db, Array.from(new Set([userKey, ...auth.keys])), userRecord, auth.hashes);
+  const nowIso = new Date().toISOString();
+  const primaryKey = accountKeys.find((key) => key.startsWith('USER_')) || accountKeys[0];
+  const primaryRecord = {
+    ...userRecord,
+    username: userRecord.username || stats.username || String(username || ''),
+    syncCode: userRecord.syncCode || (typeof syncCode === 'string' ? syncCode.toUpperCase() : ''),
+    userStats: stats,
+    updatedAt: nowIso,
+  };
+
+  // Atualizar todos os aliases da mesma conta juntos, mantendo sinais, expressões,
+  // histórico e demais campos existentes de cada registro.
+  for (const key of accountKeys) {
+    db[key] = {
+      ...db[key],
+      ...primaryRecord,
+      userStats: { ...stats },
+      updatedAt: nowIso,
+    };
+  }
+  const issuedKey = finalizeUserKey(db, accountKeys, db[primaryKey] || primaryRecord, auth.hashes);
   writeSyncDb(db);
 
   logAdminAction(
     'Bônus Diário Resgatado',
-    `Usuário "${stats.username}" resgatou +${bonus} Diamantes (Ofensiva: ${streak} dias). Novo saldo: ${stats.gems} 💎.`,
+    `Usuário "${stats.username || username}" resgatou +${bonus} Diamantes (Ofensiva: ${streak} dias). Novo saldo: ${stats.gems} 💎.`,
     'Servidor de Recompensas'
   );
 

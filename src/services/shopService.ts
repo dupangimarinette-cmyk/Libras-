@@ -9,14 +9,16 @@ export interface PurchaseResult {
   remainingBalance?: number;
 }
 
-export interface DailyClaimResult {
-  success: boolean;
-  message: string;
-  bonusDiamonds?: number;
-  updatedUserStats?: UserStats;
-}
+export interface PremiumPurchaseResult { success: boolean; message: string; updatedUserStats?: UserStats; remainingBalance?: number; }
 
 export const shopService = {
+  async purchasePremiumPlan(params: { username: string; syncCode?: string; plan: 'mensal' | 'anual' | 'vitalicio' }): Promise<PremiumPurchaseResult> {
+    try {
+      const res = await userFetch('/api/shop/premium-plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) }, { username: params.username, syncCode: params.syncCode });
+      return await res.json();
+    } catch (err: any) { return { success: false, message: 'Erro de conexão ao comprar o plano Premium: ' + err.message }; }
+  },
+
   /**
    * Somente o servidor valida saldos, compras e alterações de inventário.
    */
@@ -41,27 +43,6 @@ export const shopService = {
       return {
         success: false,
         message: 'Erro de conexão com o servidor ao processar a compra: ' + err.message,
-      };
-    }
-  },
-
-  /**
-   * Resgate de Bônus Diário de Diamantes validado no servidor
-   */
-  async claimDailyBonus(username: string, syncCode?: string): Promise<DailyClaimResult> {
-    try {
-      const res = await userFetch('/api/rewards/daily-claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, syncCode }),
-      }, { username, syncCode });
-
-      const data = await res.json();
-      return data;
-    } catch (err: any) {
-      return {
-        success: false,
-        message: 'Erro de conexão ao resgatar o bônus diário: ' + err.message,
       };
     }
   },

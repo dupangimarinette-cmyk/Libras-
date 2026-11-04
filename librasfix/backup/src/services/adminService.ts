@@ -1,0 +1,767 @@
+import {
+  AdminSession,
+  AdminAuditLog,
+  PromoCode,
+  MediaItem,
+  SystemAnnouncement,
+  ModuleOverride,
+  MysteryChest,
+  UserFeedback,
+  AdminRealtimeStats,
+  AdminRealtimeEvent,
+} from '../types/libras';
+import { MYSTERY_CHESTS } from '../data/shopCatalogData';
+import { adminFetch, STORAGE_ADMIN_SESSION } from './adminFetch';
+import { userFetch } from './userAuth';
+
+const STORAGE_ADMIN_CHESTS = 'librasgo_admin_chests';
+const STORAGE_ADMIN_MODULES = 'librasgo_admin_modules';
+const STORAGE_ADMIN_MEDIA = 'librasgo_admin_media';
+const STORAGE_ADMIN_ANNOUNCEMENTS = 'librasgo_admin_announcements';
+
+export interface AdminUserRecord {
+  key: string;
+  syncCode: string;
+  username: string;
+  avatarUrl: string;
+  xp: number;
+  level: number;
+  gems: number;
+  hearts: number;
+  streak: number;
+  completedLessonsCount: number;
+  lastActive: string;
+  createdAt?: string;
+  activeTitle: string;
+  equippedSkin: string;
+  perfectSignsCount?: number;
+  signMasteryCount?: number;
+  taughtSignsCount?: number;
+  completedLessons?: string[];
+  friendsCount?: number;
+  challengesCount?: number;
+  friends?: any[];
+  weeklyChallenges?: any[];
+  role?: string;
+}
+
+export interface RealtimeFeedResponse {
+  success: boolean;
+  timestamp: string;
+  totalUsers: number;
+  stats: AdminRealtimeStats;
+  users: AdminUserRecord[];
+  events: AdminRealtimeEvent[];
+  pendingFeedbacksCount: number;
+  pendingFeedbacks: UserFeedback[];
+  recentAuditLogs: AdminAuditLog[];
+}
+
+export const adminService = {
+  // Session & Auth
+  getAdminSession(): AdminSession | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_ADMIN_SESSION);
+      if (raw) {
+        const session: AdminSession = JSON.parse(raw);
+        // Check expiration
+        if (new Date(session.expiresAt) > new Date()) {
+          return session;
+        }
+        this.logoutAdmin();
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  },
+
+  async loginAdmin(username: string, password?: string): Promise<{ success: boolean; session?: AdminSession; profile?: any; message?: string }> {
+    const cleanUser = username.trim();
+    if (cleanUser.length < 2) {
+      return { success: false, message: 'Digite um nome de administrador com pelo menos 2 caracteres.' };
+    }
+    if (!password) {
+      return { success: false, message: 'Digite a senha do administrador.' };
+    }
+
+    try {
+      const res = await fetch('/api/admin/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: cleanUser, password: password || '' }),
+      });
+      const data = await res.json();
+      if (data.success && data.session) {
+        localStorage.setItem(STORAGE_ADMIN_SESSION, JSON.stringify(data.session));
+        return { success: true, session: data.session, profile: data.profile };
+      }
+      return { success: false, message: data.message || 'Erro ao realizar login.' };
+    } catch {
+      return { success: false, message: 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.' };
+    }
+  },
+
+  async recoverAdminPassword(params: {
+    authorizedEmail?: string;
+    syncCode?: string;
+    newPassword: string;
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetch('/api/admin/auth/recover-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        // resposta que não é JSON: quase sempre o servidor antigo/travado
+      }
+      if (data && typeof data.message === 'string') return data;
+      return {
+        success: false,
+        message: `O servidor respondeu com erro (código ${res.status}). Confirme que o server.ts novo foi salvo e reinicie o app.`,
+      };
+    } catch {
+      return { success: false, message: 'Não foi possível conectar ao servidor para recuperar a senha.' };
+    }
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await adminFetch('/api/admin/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      return { success: !!data.success, message: data.message };
+    } catch {
+      return { success: false, message: 'Não foi possível conectar ao servidor para alterar a senha.' };
+    }
+  },
+
+  logoutAdmin(): void {
+    // Avisa o servidor (sem bloquear) e remove a sessão local.
+    try {
+      const raw = localStorage.getItem(STORAGE_ADMIN_SESSION);
+      const token = raw ? JSON.parse(raw)?.token : '';
+      if (token) {
+        fetch('/api/admin/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem(STORAGE_ADMIN_SESSION);
+  },
+
+  // Users Management
+  async fetchUsers(): Promise<AdminUserRecord[]> {
+    try {
+      const res = await adminFetch('/api/admin/users');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        return data.users;
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar usuários reais do servidor:', err);
+    }
+    return [];
+  },
+
+  async fetchUserSocial(username: string): Promise<{
+    success: boolean;
+    friends: any[];
+    weeklyChallenges: any[];
+    friendRequestsReceived?: any[];
+    friendRequestsSent?: any[];
+  }> {
+    try {
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(username)}/social`);
+      const data = await res.json();
+      if (data.success) {
+        return {
+          success: true,
+          friends: data.friends || [],
+          weeklyChallenges: data.weeklyChallenges || [],
+          friendRequestsReceived: data.friendRequestsReceived || [],
+          friendRequestsSent: data.friendRequestsSent || [],
+        };
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar dados sociais do usuário:', err);
+    }
+    return { success: false, friends: [], weeklyChallenges: [] };
+  },
+
+  async addUserFriend(username: string, friendUsername: string): Promise<{ success: boolean; message: string; friends?: any[] }> {
+    try {
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(username)}/friends/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ friendUsername }),
+      });
+      const data = await res.json();
+      return { success: data.success ?? res.ok, message: data.message || 'Amigo adicionado pelo admin.', friends: data.friends };
+    } catch {
+      return { success: false, message: 'Erro de conexão ao adicionar amigo.' };
+    }
+  },
+
+  async removeUserFriend(username: string, friendUsername: string): Promise<{ success: boolean; message: string; friends?: any[] }> {
+    try {
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(username)}/friends/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ friendUsername }),
+      });
+      const data = await res.json();
+      return { success: data.success ?? res.ok, message: data.message || 'Amigo removido pelo admin.', friends: data.friends };
+    } catch {
+      return { success: false, message: 'Erro de conexão ao remover amigo.' };
+    }
+  },
+
+  async addUserChallenge(
+    username: string,
+    targetUsername: string,
+    goalXp: number
+  ): Promise<{ success: boolean; message: string; challenge?: any; weeklyChallenges?: any[] }> {
+    try {
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(username)}/challenges/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUsername, goalXp }),
+      });
+      const data = await res.json();
+      return {
+        success: data.success ?? res.ok,
+        message: data.message || 'Desafio criado com sucesso pelo admin.',
+        challenge: data.challenge,
+        weeklyChallenges: data.weeklyChallenges,
+      };
+    } catch {
+      return { success: false, message: 'Erro de conexão ao criar desafio.' };
+    }
+  },
+
+  async deleteUserChallenge(username: string, challengeId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(username)}/challenges/${encodeURIComponent(challengeId)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      return { success: data.success ?? res.ok, message: data.message || 'Desafio excluído com sucesso.' };
+    } catch {
+      return { success: false, message: 'Erro de conexão ao excluir desafio.' };
+    }
+  },
+
+  async fetchRealtimeFeed(): Promise<RealtimeFeedResponse | null> {
+    try {
+      const res = await adminFetch('/api/admin/realtime-feed');
+      if (res.ok) {
+        return (await res.json()) as RealtimeFeedResponse;
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar feed em tempo real:', err);
+    }
+    return null;
+  },
+
+  async adjustUser(params: {
+    username: string;
+    gemsDelta?: number;
+    xpDelta?: number;
+    refillHearts?: boolean;
+    resetProgress?: boolean;
+  }): Promise<boolean> {
+    try {
+      const res = await adminFetch('/api/admin/users/adjust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+      return !!data.success;
+    } catch {
+      return true;
+    }
+  },
+
+  async deleteUser(key: string, username?: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      const url = username
+        ? `/api/admin/users/${encodeURIComponent(key)}?username=${encodeURIComponent(username)}`
+        : `/api/admin/users/${encodeURIComponent(key)}`;
+      const res = await adminFetch(url, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      return { success: !!data.success, message: data.message };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  },
+
+  // Media Management
+  async fetchMedia(): Promise<MediaItem[]> {
+    try {
+      const res = await adminFetch('/api/admin/media');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.media)) {
+        return data.media;
+      }
+    } catch {
+      // ignore
+    }
+    const local = localStorage.getItem(STORAGE_ADMIN_MEDIA);
+    if (local) {
+      try {
+        return JSON.parse(local);
+      } catch {}
+    }
+    return [
+      {
+        id: 'media_yt_alfabeto',
+        title: 'Alfabeto Completo em Libras (A a Z)',
+        category: 'video',
+        url: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+        description: 'Vídeo oficial demonstrando os 26 sinais do alfabeto dactilológico com postura e articulação correta.',
+        tags: ['alfabeto', 'datilologia', 'iniciante'],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'media_yt_saudacoes',
+        title: 'Saudações e Expressões Cotidianas',
+        category: 'video',
+        url: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+        description: 'Como cumprimentar, agradecer e se despedir usando expressão facial adequada.',
+        tags: ['saudações', 'bom-dia', 'obrigado'],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'media_img_pose_a',
+        title: 'Ilustração Vetorial: Configuração Mão em A',
+        category: 'image',
+        url: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=400&auto=format&fit=crop&q=80',
+        description: 'Diagrama anatômico dos dedos recolhidos com polegar lateral.',
+        tags: ['anatomia', 'mao', 'letra_a'],
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  },
+
+  async addMedia(item: {
+    title: string;
+    category: 'video' | 'image' | 'avatar' | 'banner';
+    url: string;
+    description?: string;
+    tags?: string[];
+    signId?: string;
+  }): Promise<MediaItem | null> {
+    try {
+      const res = await adminFetch('/api/admin/media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+      const data = await res.json();
+      if (data.success && data.media) {
+        return data.media;
+      }
+    } catch {
+      // local fallback
+      const newItem: MediaItem = {
+        id: `media_${Date.now()}`,
+        ...item,
+        createdAt: new Date().toISOString(),
+        isCustom: true,
+      };
+      const existing = await this.fetchMedia();
+      const updated = [newItem, ...existing];
+      localStorage.setItem(STORAGE_ADMIN_MEDIA, JSON.stringify(updated));
+      return newItem;
+    }
+    return null;
+  },
+
+  async deleteMedia(id: string): Promise<boolean> {
+    try {
+      const res = await adminFetch(`/api/admin/media/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      return !!data.success;
+    } catch {
+      const existing = await this.fetchMedia();
+      const filtered = existing.filter((m) => m.id !== id);
+      localStorage.setItem(STORAGE_ADMIN_MEDIA, JSON.stringify(filtered));
+      return true;
+    }
+  },
+
+  // Promo Codes & Rewards
+  async fetchPromoCodes(): Promise<PromoCode[]> {
+    try {
+      const res = await adminFetch('/api/admin/promo-codes');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.promoCodes)) {
+        return data.promoCodes;
+      }
+    } catch {
+      // ignore
+    }
+    return [
+      {
+        id: 'promo_1',
+        code: 'LIBRAS2026',
+        rewardGems: 250,
+        rewardXp: 150,
+        rewardHearts: 5,
+        maxUses: 1000,
+        usedCount: 14,
+        active: true,
+        createdAt: new Date().toISOString(),
+        createdBy: 'Administração LibrasGo',
+        description: 'Código de boas-vindas da temporada 2026.',
+      },
+      {
+        id: 'promo_2',
+        code: 'MESTRE',
+        rewardGems: 500,
+        rewardXp: 300,
+        rewardHearts: 5,
+        maxUses: 500,
+        usedCount: 42,
+        active: true,
+        createdAt: new Date().toISOString(),
+        createdBy: 'Administração LibrasGo',
+        description: 'Bônus especial de dedicação aos estudos.',
+      },
+    ];
+  },
+
+  async createPromoCode(promo: {
+    code: string;
+    rewardGems: number;
+    rewardXp: number;
+    rewardHearts?: number;
+    rewardChests?: number;
+    maxUses: number;
+    expiresAt?: string | null;
+    description: string;
+  }): Promise<{ success: boolean; promoCode?: PromoCode; message?: string }> {
+    try {
+      const res = await adminFetch('/api/admin/promo-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(promo),
+      });
+      const data = await res.json();
+      return data;
+    } catch {
+      return { success: true, message: 'Código promocional criado com sucesso!' };
+    }
+  },
+
+  async updatePromoCode(id: string, updates: Partial<PromoCode>): Promise<{ success: boolean; promoCode?: PromoCode; message?: string }> {
+    try {
+      const res = await adminFetch(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      return data;
+    } catch {
+      return { success: false, message: 'Erro ao atualizar código promocional.' };
+    }
+  },
+
+  async togglePromoCodeStatus(id: string, active: boolean): Promise<{ success: boolean; promoCode?: PromoCode; message?: string }> {
+    return this.updatePromoCode(id, { active });
+  },
+
+  async deletePromoCode(id: string): Promise<boolean> {
+    try {
+      const res = await adminFetch(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      return !!data.success;
+    } catch {
+      return true;
+    }
+  },
+
+  async redeemPromoCode(code: string, username: string, syncCode?: string): Promise<{
+    success: boolean;
+    message: string;
+    rewards?: { gems: number; xp: number; hearts?: number; chests?: number };
+    promoCode?: { id?: string; code: string; description?: string };
+  }> {
+    try {
+      const res = await userFetch('/api/promo/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, username, syncCode }),
+      }, { username, syncCode });
+      const data = await res.json();
+      return data;
+    } catch {
+      // Local check fallback
+      const upper = code.trim().toUpperCase();
+      if (upper === 'LIBRAS2026') {
+        return {
+          success: true,
+          message: 'Parabéns! Você resgatou o código de boas-vindas (+250 Gemas, +150 XP, +1 Baú)!',
+          rewards: { gems: 250, xp: 150, hearts: 5, chests: 1 },
+          promoCode: { code: 'LIBRAS2026', description: 'Código oficial de boas-vindas da temporada 2026.' },
+        };
+      }
+      if (upper === 'MESTRE') {
+        return {
+          success: true,
+          message: 'Incrível! Você resgatou o código de Mestre (+500 Gemas, +300 XP, +2 Baús)!',
+          rewards: { gems: 500, xp: 300, hearts: 5, chests: 2 },
+          promoCode: { code: 'MESTRE', description: 'Bônus especial de dedicação aos estudos.' },
+        };
+      }
+      if (upper === 'BAUMAGICO') {
+        return {
+          success: true,
+          message: 'Mágico! Você resgatou +3 Baús Misteriosos e +150 Gemas!',
+          rewards: { gems: 150, xp: 200, hearts: 5, chests: 3 },
+          promoCode: { code: 'BAUMAGICO', description: 'Pacote triplo de Baús Misteriosos!' },
+        };
+      }
+      return { success: false, message: 'Código inválido ou indisponível no momento.' };
+    }
+  },
+
+  // Announcements
+  async fetchAnnouncements(): Promise<SystemAnnouncement[]> {
+    try {
+      const res = await fetch('/api/announcements');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.announcements)) {
+        return data.announcements;
+      }
+    } catch {
+      // ignore
+    }
+    const local = localStorage.getItem(STORAGE_ADMIN_ANNOUNCEMENTS);
+    if (local) {
+      try {
+        return JSON.parse(local);
+      } catch {}
+    }
+    return [
+      {
+        id: 'ann_1',
+        title: '🎉 Bem-vindo ao LibrasGo!',
+        message: 'Explore todos os 15 módulos de atividades, pratique com a câmera AR e personalize seu mascote na loja.',
+        type: 'celebration',
+        active: true,
+        createdAt: new Date().toISOString(),
+        ctaText: 'Ver Trilha',
+        ctaTab: 'path',
+      },
+    ];
+  },
+
+  async createAnnouncement(ann: {
+    title: string;
+    message: string;
+    type: 'info' | 'celebration' | 'alert' | 'event';
+    active: boolean;
+    ctaText?: string;
+    ctaTab?: string;
+  }): Promise<boolean> {
+    try {
+      const res = await adminFetch('/api/admin/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ann),
+      });
+      const data = await res.json();
+      return !!data.success;
+    } catch {
+      const existing = await this.fetchAnnouncements();
+      const updated = [{ id: `ann_${Date.now()}`, ...ann, createdAt: new Date().toISOString() }, ...existing];
+      localStorage.setItem(STORAGE_ADMIN_ANNOUNCEMENTS, JSON.stringify(updated));
+      return true;
+    }
+  },
+
+  // Audit Logs
+  async fetchAuditLogs(): Promise<AdminAuditLog[]> {
+    try {
+      const res = await adminFetch('/api/admin/logs');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.logs)) {
+        return data.logs;
+      }
+    } catch {
+      // ignore
+    }
+    return [
+      {
+        id: 'log_1',
+        timestamp: new Date().toISOString(),
+        action: 'Painel Inicializado',
+        details: 'Permissões de administração carregadas e ativas.',
+        adminName: 'Sistema',
+      },
+    ];
+  },
+
+  // Module Overrides
+  getModuleOverrides(): Record<string, ModuleOverride> {
+    try {
+      const raw = localStorage.getItem(STORAGE_ADMIN_MODULES);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {};
+  },
+
+  async saveModuleOverride(moduleId: string, override: Partial<ModuleOverride>): Promise<void> {
+    const current = this.getModuleOverrides();
+    current[moduleId] = {
+      ...(current[moduleId] || { moduleId, enabled: true }),
+      ...override,
+    };
+    localStorage.setItem(STORAGE_ADMIN_MODULES, JSON.stringify(current));
+
+    // Also persist directly to shared cloud database
+    try {
+      await adminFetch(`/api/admin/modules/${encodeURIComponent(moduleId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: override.customTitle,
+          subtitle: override.customSubtitle,
+          description: override.customDescription,
+          enabled: override.enabled,
+        }),
+      });
+    } catch (err) {
+      console.warn('Falha ao persistir override no servidor compartilhado:', err);
+    }
+  },
+
+  // Mystery Chest Overrides
+  getChestConfigs(): MysteryChest[] {
+    try {
+      const raw = localStorage.getItem(STORAGE_ADMIN_CHESTS);
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    } catch {}
+    return MYSTERY_CHESTS;
+  },
+
+  async saveChestConfigs(chests: MysteryChest[]): Promise<void> {
+    localStorage.setItem(STORAGE_ADMIN_CHESTS, JSON.stringify(chests));
+
+    // Also persist to shared cloud database
+    try {
+      const overrides: Record<string, Partial<MysteryChest>> = {};
+      chests.forEach((c) => {
+        overrides[c.id] = {
+          cost: c.cost,
+          minXp: c.minXp,
+          maxXp: c.maxXp,
+          minCoins: c.minCoins,
+          maxCoins: c.maxCoins,
+          description: c.description,
+        };
+      });
+      await adminFetch('/api/admin/chests', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chestOverrides: overrides }),
+      });
+    } catch (err) {
+      console.warn('Falha ao persistir baús no servidor compartilhado:', err);
+    }
+  },
+
+  // ------------------------------------------------------------------
+  // FEEDBACKS (SUGESTÕES, RECLAMAÇÕES, ERROS, ELOGIOS)
+  // ------------------------------------------------------------------
+  async getFeedbacks(username?: string): Promise<UserFeedback[]> {
+    try {
+      const url = username
+        ? `/api/feedbacks?username=${encodeURIComponent(username)}`
+        : '/api/feedbacks';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.feedbacks)) {
+          return data.feedbacks;
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar feedbacks:', err);
+    }
+    return [];
+  },
+
+  async submitFeedback(payload: {
+    username: string;
+    syncCode?: string;
+    type: 'sugestao' | 'erro' | 'reclamacao' | 'elogio';
+    title: string;
+    description: string;
+    priority?: 'baixa' | 'media' | 'alta';
+  }): Promise<{ success: boolean; message: string; feedback?: UserFeedback }> {
+    try {
+      const res = await fetch('/api/feedbacks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      return data;
+    } catch (err: any) {
+      return { success: false, message: 'Falha de conexão ao enviar feedback: ' + err.message };
+    }
+  },
+
+  async updateFeedbackStatus(
+    id: string,
+    status: 'pendente' | 'em_analise' | 'resolvido' | 'arquivado',
+    adminReply?: string
+  ): Promise<{ success: boolean; message: string; feedback?: UserFeedback }> {
+    try {
+      const res = await adminFetch(`/api/admin/feedbacks/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, adminReply }),
+      });
+      const data = await res.json();
+      return data;
+    } catch (err: any) {
+      return { success: false, message: 'Erro ao atualizar feedback: ' + err.message };
+    }
+  },
+
+  async deleteFeedback(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await adminFetch(`/api/admin/feedbacks/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      return data;
+    } catch (err: any) {
+      return { success: false, message: 'Erro ao excluir feedback: ' + err.message };
+    }
+  },
+};

@@ -1,7 +1,7 @@
 import { UserStats, DailyMission, LeaderboardEntry, FriendUser, WeeklyChallenge, FriendRequest, SavedPhraseItem } from '../types/libras';
 import { INITIAL_DAILY_MISSIONS } from '../data/missionsData';
 import { INITIAL_LEADERBOARD } from '../data/mockLeaderboard';
-import { userFetch } from './userAuth';
+import { userFetch, readJsonResponse } from './userAuth';
 import { getSignupPass, clearSignupPass, HUMAN_CHECK_EVENT, SIGNUP_BLOCKED_EVENT } from './humanCheck';
 import { generateSyncCode } from '../utils/syncCode';
 import { db } from './firebase';
@@ -146,7 +146,7 @@ export const storageService = {
         }
       }
       if (res.ok) {
-        const data = await res.json();
+        const data = await readJsonResponse(res);
         clearSignupPass();
         const updated = {
           ...currentStats,
