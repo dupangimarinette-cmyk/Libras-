@@ -50,26 +50,11 @@ export const dailyBonusService = {
       const code = (typedCode || '').trim().toUpperCase();
       if (code) await unlockWithCode(code);
 
-      let raw = await postClaim(username, code || syncCode);
+      const raw = await postClaim(username, code || syncCode);
 
-      const needsKey = raw.status === 403 && raw.data?.code === 'KEY_REQUIRED';
-      if (needsKey && !code && syncCode) {
-        await unlockWithCode(syncCode);
-        raw = await postClaim(username, syncCode);
-      }
-
-      if (raw.status === 403 && raw.data?.code === 'KEY_REQUIRED') {
-        return {
-          success: false,
-          needsCode: true,
-          message: 'Esta conta está protegida. Digite o código de sincronização para liberar o resgate neste aparelho.',
-        };
-      }
-
+      // O bônus não exige mais código de sincronização: o servidor não responde KEY_REQUIRED nesta rota.
       const data = raw.data;
       if (!data || typeof data !== 'object') {
-        // Resposta sem JSON: a recusa costuma vir da hospedagem (proxy, Cloud Run ou Cloudflare),
-        // antes do código do app. Registra os detalhes para diagnóstico.
         const detail = `HTTP ${raw.status} · tipo: ${raw.contentType}${raw.snippet ? ` · corpo: "${raw.snippet}"` : ' · corpo vazio'}`;
         console.error('[bonus diário] resposta sem JSON:', detail);
         return {

@@ -106,7 +106,7 @@ type AuthResult =
  * Contas com chave exigem o header X-User-Key. Contas antigas (sem chave) e contas novas
  * passam, e recebem a chave na primeira gravação (finalizeUserKey).
  */
-function authorizeUser(req: Request, db: Record<string, any>, username: unknown, syncCode: unknown): AuthResult {
+function authorizeUser(req: Request, db: Record<string, any>, username: unknown, syncCode: unknown, opts: { skipKey?: boolean } = {}): AuthResult {
   if (isArchivedBlockedIdentity(username, syncCode)) {
     return { ok: false, status: 403, message: 'Esta conta foi arquivada e está bloqueada. Entre em contato com a administração.' };
   }
@@ -117,7 +117,7 @@ function authorizeUser(req: Request, db: Record<string, any>, username: unknown,
   const records = keys.map((k) => db[k]);
   const protectedRecords = records.filter((r) => Array.isArray(r.authKeyHashes) && r.authKeyHashes.length > 0);
   const key = readUserKey(req);
-  if (protectedRecords.length > 0 && !protectedRecords.every((r) => recordKeyMatches(r, key))) {
+  if (!opts.skipKey && protectedRecords.length > 0 && !protectedRecords.every((r) => recordKeyMatches(r, key))) {
     return {
       ok: false,
       status: 403,
@@ -360,15 +360,10 @@ function checkSignupGate(req: Request, username: unknown): SignupGate {
     alertOnce(`rate:${ip}`, 'Cadastro Bloqueado', `Muitas contas novas seguidas vindas da mesma rede (limite ${SIGNUP_LIMITS.newAccountsPerIpPerHour}/hora). Último nome: "${String(username).slice(0, 40)}".`);
     return { ok: false, status: 429, code: 'SIGNUP_RATE', message: 'Muitos cadastros desta rede em pouco tempo. Tente novamente mais tarde.' };
   }
-  const pass = readToken(req.headers['x-signup-pass']);
-  pruneNonces();
-  if (!pass || pass.t !== 'pass' || typeof pass.n !== 'string' || usedSignupNonces.has(pass.n)) {
-    return { ok: false, status: 428, code: 'SIGNUP_CHECK_REQUIRED', message: 'Confirme que você é uma pessoa para criar a conta.' };
-  }
+  // Verificação matemática removida: o cadastro segue protegido pela checagem de nome e pelo limite por rede.
   return {
     ok: true,
     consume: () => {
-      usedSignupNonces.set(pass.n, pass.exp);
       newAccountLimiter.hit(ip);
     },
   };
@@ -1665,7 +1660,8 @@ app.post(['/api/rewards/daily-claim', '/api/bonus/resgatar-diario'], (req: Reque
   // Resolver a conta por qualquer identificador válido. A versão anterior exigia
   // USER_<nome> mesmo quando o registro existente estava disponível pelo syncCode.
   const requestedKeys = normalizeAccountKeys(username, syncCode);
-  const auth = authorizeUser(req, db, username, syncCode);
+  // Bônus diário sem código de sincronização: a conta só precisa existir (arquivada e robôs continuam bloqueados).
+  const auth = authorizeUser(req, db, username, syncCode, { skipKey: true });
   if (!auth.ok) {
     return res.status(auth.status).json({ success: false, code: 'KEY_REQUIRED', message: auth.message });
   }
@@ -1766,8 +1762,8 @@ app.post('/api/promo/redeem', (req: Request, res: Response) => {
 
   const cleanCode = code.toUpperCase().trim();
 
-  // Se o aluno já tem conta protegida, só o próprio aparelho (com a chave) pode resgatar em nome dele.
-  const redeemAuth = authorizeUser(req, readSyncDb(), username, syncCode);
+  // Resgate de código sem chave da conta: a conta só precisa existir (arquivada e robôs continuam bloqueados).
+  const redeemAuth = authorizeUser(req, readSyncDb(), username, syncCode, { skipKey: true });
   if (!redeemAuth.ok) {
     return res.status(redeemAuth.status).json({ success: false, code: 'KEY_REQUIRED', message: redeemAuth.message });
   }

@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { HumanCheck } from './HumanCheck';
-import { getSignupPass, looksAutomatedName } from '../../services/humanCheck';
-import { getUserKey } from '../../services/userAuth';
+import { looksAutomatedName } from '../../services/humanCheck';
 import {
   User,
   Sparkles,
@@ -84,7 +82,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   );
   const [selectedAvatar, setSelectedAvatar] = useState(currentAvatar || AVATAR_OPTIONS[0].url);
   const [learnerError, setLearnerError] = useState('');
-  const [pendingLearner, setPendingLearner] = useState<string | null>(null);
   const [savedProfiles] = useState<QuickProfile[]>(() => storageService.getSavedProfiles());
 
   // Admin form state (preserved administrator account)
@@ -150,22 +147,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return;
     }
 
-    // Nome novo neste aparelho = conta nova: pede a confirmação de que é uma pessoa antes de criar.
-    const knownHere =
-      savedProfiles.some((p) => p.username.trim().toLowerCase() === trimmed.toLowerCase()) ||
-      Boolean(getUserKey({ username: trimmed }));
-    if (!knownHere && !getSignupPass()) {
-      audio.playClick();
-      setPendingLearner(trimmed);
-      return;
-    }
-
     finishLearnerLogin(trimmed);
   };
 
   const finishLearnerLogin = (name: string) => {
     audio.playSuccess();
-    setPendingLearner(null);
     storageService.saveProfile(name, selectedAvatar, 'learner');
     onLogin(name, selectedAvatar, 'learner');
   };
@@ -443,13 +429,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   })}
                 </div>
               </div>
-
-              {pendingLearner && (
-                <HumanCheck
-                  onVerified={() => finishLearnerLogin(pendingLearner)}
-                  onCancel={() => setPendingLearner(null)}
-                />
-              )}
 
               {/* Submit Button */}
               <button

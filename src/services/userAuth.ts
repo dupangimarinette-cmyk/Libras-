@@ -9,14 +9,22 @@ export interface Identity {
   syncCode?: string;
 }
 
+/**
+ * Cópia em memória das chaves desta sessão. Se o navegador bloquear o localStorage
+ * (ex.: visualização embutida ou aba privada), a chave recebida continua válida até fechar o app.
+ */
+const memoryKeys: Record<string, string> = {};
+
 function readMap(): Record<string, string> {
+  let stored: Record<string, string> = {};
   try {
     const raw = localStorage.getItem(STORE);
     const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    stored = parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
-    return {};
+    stored = {};
   }
+  return { ...stored, ...memoryKeys };
 }
 
 function identityKeys(id: Identity): string[] {
@@ -37,6 +45,7 @@ export function getUserKey(id: Identity): string {
 }
 
 export function storeUserKey(ids: Identity[], key: string): void {
+  for (const id of ids) for (const k of identityKeys(id)) memoryKeys[k] = key;
   try {
     const map = readMap();
     for (const id of ids) for (const k of identityKeys(id)) map[k] = key;
